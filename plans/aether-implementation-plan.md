@@ -4,9 +4,9 @@
 
 **Goal:** Build a private family document vault that stores original files in Google Drive and progressively adds reusable tags, content indexing, OCR, and evidence-backed natural-language retrieval.
 
-**Architecture:** Aether is a modular Go monolith with a React/TypeScript responsive web client. Google Drive is the reference object store, SQLite or PostgreSQL holds the live catalog, and versioned manifests make stored documents portable and recoverable.
+**Architecture:** Aether is a modular Go monolith with a React/TypeScript responsive web client. Google Drive is the reference object store, PostgreSQL holds the live catalog in local and hosted environments, and versioned manifests make stored documents portable and recoverable.
 
-**Tech Stack:** Go 1.27, React with TypeScript and Vite, PostgreSQL with pgvector, SQLite with FTS5, Google OAuth/OIDC, Google Drive API, OCRmyPDF/Tesseract, Docker Compose, and Caddy.
+**Tech Stack:** Go 1.27, React with TypeScript and Vite, PostgreSQL with pgvector, Google OAuth/OIDC, Google Drive API, OCRmyPDF/Tesseract, Docker Compose, and Caddy.
 
 **Spec:** This file incorporates the approved product design and staged implementation roadmap.
 
@@ -32,7 +32,7 @@ aether/
 ├── backend/
 │   ├── cmd/aether/            # Go process entrypoint
 │   ├── internal/              # Private domain and adapter packages
-│   ├── migrations/            # SQLite and PostgreSQL schema migrations
+│   ├── migrations/            # PostgreSQL schema migrations
 │   ├── go.mod
 │   └── go.sum
 ├── frontend/
@@ -116,12 +116,12 @@ Acceptance: backend and frontend start independently, the health test passes, an
 ### 2. Catalog and Domain Foundations
 
 - [ ] Define document, tag, member, and audit domain types without database-specific fields.
-- [ ] Add explicit repository interfaces and migrations for both SQLite and PostgreSQL.
-- [ ] Implement repository contract tests that execute against each database.
+- [ ] Add explicit repository interfaces and PostgreSQL migrations.
+- [ ] Implement repository contract tests against containerized PostgreSQL.
 - [ ] Add lifecycle-transition and optimistic-concurrency tests before implementing document persistence.
-- [ ] Add configuration profiles for SQLite/local storage and PostgreSQL/provider storage.
+- [ ] Add PostgreSQL configuration profiles for local containers and hosted providers.
 
-Acceptance: the same domain tests pass against SQLite and containerized PostgreSQL, including conflict and rollback cases.
+Acceptance: the domain and repository contract tests pass against containerized PostgreSQL, including conflict and rollback cases.
 
 ### 3. Identity and Membership
 
@@ -183,7 +183,7 @@ Acceptance: a fresh VPS can deploy the tagged vault through documented commands 
 - [ ] Run web and worker roles from the same binary, with combined mode available locally.
 - [ ] Extract embedded page text from text-native PDFs without modifying originals.
 - [ ] Store page provenance, chunks, extractor name, and extractor version.
-- [ ] Add PostgreSQL full-text/trigram search and SQLite FTS5 search.
+- [ ] Add PostgreSQL full-text and trigram search.
 - [ ] Return highlighted page snippets and provide administrator retry controls.
 - [ ] Move manifest synchronization, reconciliation, cleanup, and purge onto background jobs.
 
@@ -204,7 +204,7 @@ Acceptance: representative printed-English scans become searchable, while unread
 - [ ] Add an `EmbeddingProvider` with local Ollama and explicitly configured cloud-compatible adapters.
 - [ ] Chunk text by page and paragraph with overlap while preserving provenance.
 - [ ] Store model name, vector dimension, and version with every embedding.
-- [ ] Use pgvector in PostgreSQL and brute-force cosine ranking for family-scale SQLite installations.
+- [ ] Use pgvector for vector storage and cosine ranking.
 - [ ] Fuse metadata/full-text, fuzzy, and semantic candidates using reciprocal-rank fusion.
 - [ ] Add an `EnrichmentProvider` that suggests title, type, issuer, people, dates, reference numbers, and tags without overwriting confirmed metadata.
 - [ ] Return “matched because” evidence rather than generated factual answers.
@@ -215,7 +215,7 @@ Acceptance: the expected document appears in the top five for at least 85% of be
 ## Verification Strategy
 
 - Use Go unit tests for permissions, lifecycle transitions, tag normalization, retries, and ranking fusion.
-- Run repository contracts against SQLite and containerized PostgreSQL.
+- Run repository contracts against containerized PostgreSQL.
 - Run object-store contracts against local storage and a fake Drive HTTP server; keep real Drive tests opt-in.
 - Use React Testing Library for components and Playwright for login, upload, tag search, preview, editing, deletion, restoration, and administration flows.
 - Inject failures around storage/database boundaries, worker crashes, duplicated jobs, OAuth rejection, stale edits, and reconciliation.
@@ -231,4 +231,4 @@ Acceptance: the expected document appears in the top five for at least 85% of be
 - Per-document visibility and sharing.
 - Bidirectional Google Drive synchronization.
 - End-to-end encryption, which conflicts with server-side content indexing and search.
-
+- A SQLite catalog adapter; add it only if a concrete offline deployment requires it.

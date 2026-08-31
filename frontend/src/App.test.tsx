@@ -10,20 +10,21 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test('shows that the API is ready after a successful health check', async () => {
+test('presents the coming-soon message without requesting API status', () => {
+  const fetch = vi.fn()
+  vi.stubGlobal('fetch', fetch)
   vi.stubGlobal(
-    'fetch',
-    vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ status: 'ok' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    ),
+    'matchMedia',
+    vi.fn().mockReturnValue({
+      addEventListener: vi.fn(),
+      matches: true,
+      removeEventListener: vi.fn(),
+    }),
   )
 
   render(<App />)
 
-  expect(
-    await screen.findByRole('status', { name: 'API status' }),
-  ).toHaveTextContent('Aether API is ready')
+  expect(screen.getByRole('heading', { name: 'AETHER' })).toBeVisible()
+  expect(screen.getByText('COMING SOON')).toBeVisible()
+  expect(fetch).not.toHaveBeenCalled()
 })

@@ -102,7 +102,10 @@ func (s *Store) UpdateDocument(ctx context.Context, document domain.Document, ex
 	return s.GetDocument(ctx, document.ID)
 }
 
+// rowScanner reads the columns of a single database row into destination
+// values.
 type rowScanner interface {
+	// Scan copies the current row's columns into destination values.
 	Scan(dest ...any) error
 }
 

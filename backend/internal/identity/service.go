@@ -27,14 +27,23 @@ type Identity struct {
 	DisplayName   string
 }
 
+// Repository persists allowlisted members and their server-side sessions.
 type Repository interface {
+	// CreateMember persists an allowlisted member.
 	CreateMember(context.Context, domain.Member) error
+	// GetMemberByEmail returns a member by normalized email.
 	GetMemberByEmail(context.Context, string) (domain.Member, error)
+	// GetMember returns a member by ID.
 	GetMember(context.Context, domain.MemberID) (domain.Member, error)
+	// UpdateMember persists changes to an existing member.
 	UpdateMember(context.Context, domain.Member) (domain.Member, error)
+	// ListMembers returns all allowlisted members.
 	ListMembers(context.Context) ([]domain.Member, error)
+	// CreateSession persists a server-side session.
 	CreateSession(context.Context, domain.Session) error
+	// GetSessionByTokenHash returns a session by its stored token digest.
 	GetSessionByTokenHash(context.Context, string) (domain.Session, error)
+	// DeleteSessionByTokenHash invalidates a session by its stored token digest.
 	DeleteSessionByTokenHash(context.Context, string) error
 }
 

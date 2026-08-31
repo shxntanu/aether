@@ -13,17 +13,33 @@ import (
 
 const SessionCookieName = "aether_session"
 
+// IdentityService provides membership administration and session operations
+// required by the HTTP handlers.
 type IdentityService interface {
+	// CompleteLogin creates a session for a verified, allowlisted identity.
 	CompleteLogin(context.Context, identity.Identity) (string, domain.Member, error)
+	// Authenticate resolves a session token to its current member.
 	Authenticate(context.Context, string) (domain.Member, error)
+	// Logout invalidates the session identified by a raw token.
 	Logout(context.Context, string) error
+	// ListMembers returns all allowlisted members.
 	ListMembers(context.Context) ([]domain.Member, error)
+	// AddMember creates an active allowlisted member.
 	AddMember(context.Context, string, domain.MemberRole) (domain.Member, error)
-	ChangeMember(context.Context, domain.MemberID, domain.MemberRole, domain.MemberStatus) (domain.Member, error)
+	// ChangeMember updates a member's role and active or disabled status.
+	ChangeMember(
+		context.Context,
+		domain.MemberID,
+		domain.MemberRole,
+		domain.MemberStatus,
+	) (domain.Member, error)
 }
 
+// OIDCService starts and completes the browser-facing OIDC login flow.
 type OIDCService interface {
+	// Start creates a protected login flow and returns its provider URL.
 	Start(context.Context) (string, error)
+	// Complete validates the callback and returns the provider identity.
 	Complete(context.Context, string, string) (identity.Identity, error)
 }
 

@@ -13,9 +13,14 @@ import (
 	"github.com/shxntanu/aether/backend/migrations"
 )
 
+// executor contains the database operations used by Store so they can be
+// replaced with a test double.
 type executor interface {
+	// ExecContext executes a statement with context cancellation support.
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	// QueryContext executes a query and returns its rows.
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	// QueryRowContext executes a query expected to return at most one row.
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 

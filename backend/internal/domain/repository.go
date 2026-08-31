@@ -11,29 +11,52 @@ var (
 	ErrAlreadyExists = errors.New("already exists")
 )
 
+// Repository persists catalog entities and coordinates operations that must
+// share a transaction. Implementations return ErrNotFound, ErrConflict, or
+// ErrAlreadyExists when the corresponding domain condition applies.
 type Repository interface {
+	// CreateDocument persists a new document.
 	CreateDocument(ctx context.Context, document Document) error
+	// GetDocument returns a document by ID.
 	GetDocument(ctx context.Context, id DocumentID) (Document, error)
+	// UpdateDocument applies metadata changes only when expectedVersion matches.
 	UpdateDocument(ctx context.Context, document Document, expectedVersion int64) (Document, error)
 
+	// CreateTag persists a new reusable tag.
 	CreateTag(ctx context.Context, tag Tag) error
+	// GetTagByNormalizedName returns a tag by its case-normalized name.
 	GetTagByNormalizedName(ctx context.Context, normalizedName string) (Tag, error)
+	// AttachTag associates an existing tag with a document.
 	AttachTag(ctx context.Context, documentID DocumentID, tagID TagID) error
+	// ListDocumentTags returns all tags associated with a document.
 	ListDocumentTags(ctx context.Context, documentID DocumentID) ([]Tag, error)
 
+	// CreateMember persists a new allowlisted member.
 	CreateMember(ctx context.Context, member Member) error
+	// GetMember returns an allowlisted member by ID.
 	GetMember(ctx context.Context, id MemberID) (Member, error)
+	// GetMemberByEmail returns an allowlisted member by normalized email.
 	GetMemberByEmail(ctx context.Context, email string) (Member, error)
+	// UpdateMember persists changes to an existing member.
 	UpdateMember(ctx context.Context, member Member) (Member, error)
+	// ListMembers returns all allowlisted members.
 	ListMembers(ctx context.Context) ([]Member, error)
+	// CreateSession persists a server-side session.
 	CreateSession(ctx context.Context, session Session) error
+	// GetSessionByTokenHash returns a session by its stored token digest.
 	GetSessionByTokenHash(ctx context.Context, tokenHash string) (Session, error)
+	// DeleteSessionByTokenHash invalidates a session by its stored token digest.
 	DeleteSessionByTokenHash(ctx context.Context, tokenHash string) error
+	// CreateAuthFlow persists a short-lived OIDC authorization flow.
 	CreateAuthFlow(ctx context.Context, flow AuthFlow) error
+	// ConsumeAuthFlow atomically returns and invalidates a flow by state digest.
 	ConsumeAuthFlow(ctx context.Context, stateHash string) (AuthFlow, error)
 
+	// AppendAuditEvent adds an immutable event to the audit log.
 	AppendAuditEvent(ctx context.Context, event AuditEvent) error
+	// ListAuditEvents returns audit events for a catalog object.
 	ListAuditEvents(ctx context.Context, objectType, objectID string) ([]AuditEvent, error)
 
+	// WithinTransaction runs operation with all repository calls in one transaction.
 	WithinTransaction(ctx context.Context, operation func(Repository) error) error
 }

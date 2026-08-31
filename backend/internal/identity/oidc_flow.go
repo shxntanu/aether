@@ -12,13 +12,21 @@ import (
 
 var ErrInvalidOIDCFlow = errors.New("OIDC login flow is invalid or expired")
 
+// OIDCProvider builds authorization requests and exchanges authorization codes
+// while validating the provider's identity claims.
 type OIDCProvider interface {
+	// AuthorizationURL returns the provider URL for a stateful PKCE login.
 	AuthorizationURL(state, nonce, codeChallenge string) string
+	// ExchangeAndVerify exchanges code and validates its nonce-bound identity.
 	ExchangeAndVerify(ctx context.Context, code, codeVerifier, nonce string) (Identity, error)
 }
 
+// AuthFlowRepository stores short-lived OIDC login state and consumes each
+// state exactly once.
 type AuthFlowRepository interface {
+	// CreateAuthFlow stores the state, nonce, verifier, and expiry for a login.
 	CreateAuthFlow(context.Context, domain.AuthFlow) error
+	// ConsumeAuthFlow atomically retrieves and invalidates a flow by state hash.
 	ConsumeAuthFlow(context.Context, string) (domain.AuthFlow, error)
 }
 

@@ -8,6 +8,7 @@ import (
 	"golang.org/x/oauth2"
 )
 
+// tokenVerifier validates an OIDC token and returns its claims.
 type tokenVerifier interface {
 	Verify(context.Context, string) (*oidc.IDToken, error)
 }

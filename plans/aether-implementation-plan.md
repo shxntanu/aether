@@ -125,11 +125,11 @@ Acceptance: the domain and repository contract tests pass against containerized 
 
 ### 3. Identity and Membership
 
-- [ ] Implement Google OIDC using state, nonce, PKCE, exact redirect URIs, and secure server-side sessions.
-- [ ] Seed the first administrator from a configured bootstrap email.
-- [ ] Implement active/disabled membership and `member`/`admin` roles.
+- [x] Implement Google OIDC using state, nonce, PKCE, exact redirect URIs, and secure server-side sessions.
+- [x] Seed the first administrator from a configured bootstrap email.
+- [x] Implement active/disabled membership and `member`/`admin` roles.
 - [ ] Add administrator member-management endpoints and UI.
-- [ ] Enforce authorization in Go and test unauthenticated, disabled, member, and administrator cases.
+- [x] Enforce authorization in Go and test unauthenticated, disabled, member, and administrator cases.
 
 Acceptance: only allowlisted active accounts enter the vault, and only administrators can manage membership.
 

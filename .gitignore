@@ -12,3 +12,5 @@ dist/
 coverage/
 tmp/
 .worktrees/
+
+.impeccable

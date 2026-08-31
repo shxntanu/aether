@@ -17,11 +17,28 @@ const (
 )
 
 type Member struct {
-	ID          MemberID
-	Email       string
-	DisplayName string
-	Role        MemberRole
-	Status      MemberStatus
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          MemberID     `json:"id"`
+	Email       string       `json:"email"`
+	DisplayName string       `json:"displayName"`
+	OIDCSubject string       `json:"-"`
+	Role        MemberRole   `json:"role"`
+	Status      MemberStatus `json:"status"`
+	CreatedAt   time.Time    `json:"createdAt"`
+	UpdatedAt   time.Time    `json:"updatedAt"`
+}
+
+type Session struct {
+	ID        string
+	TokenHash string
+	MemberID  MemberID
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+type AuthFlow struct {
+	StateHash    string
+	Nonce        string
+	PKCEVerifier string
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
 }

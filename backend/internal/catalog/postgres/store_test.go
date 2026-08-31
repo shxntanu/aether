@@ -23,7 +23,7 @@ func TestRepositoryContract(t *testing.T) {
 		}
 		if _, err := store.db.ExecContext(
 			context.Background(),
-			"TRUNCATE audit_events, document_tags, documents, tags, members CASCADE",
+			"TRUNCATE auth_flows, audit_events, document_tags, documents, tags, members CASCADE",
 		); err != nil {
 			_ = store.Close()
 			t.Fatalf("truncate test catalog: %v", err)

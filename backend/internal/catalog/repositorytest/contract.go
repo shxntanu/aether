@@ -140,6 +140,66 @@ func Run(t *testing.T, factory Factory) {
 		}
 	})
 
+	t.Run("updates and lists members", func(t *testing.T) {
+		repository := factory(t)
+		ctx := context.Background()
+		member := memberFixture("member-managed", "managed@example.com")
+		mustCreateMember(t, ctx, repository, member)
+		member.Role, member.Status = domain.MemberRoleAdmin, domain.MemberStatusDisabled
+		updated, err := repository.UpdateMember(ctx, member)
+		if err != nil {
+			t.Fatalf("UpdateMember() error = %v", err)
+		}
+		got, err := repository.GetMember(ctx, member.ID)
+		if err != nil {
+			t.Fatalf("GetMember() error = %v", err)
+		}
+		members, err := repository.ListMembers(ctx)
+		if err != nil {
+			t.Fatalf("ListMembers() error = %v", err)
+		}
+		if updated.Role != domain.MemberRoleAdmin || got.Status != domain.MemberStatusDisabled || len(members) != 1 {
+			t.Fatalf("updated/get/list = %#v/%#v/%#v", updated, got, members)
+		}
+	})
+
+	t.Run("stores only session token hashes", func(t *testing.T) {
+		repository := factory(t)
+		ctx := context.Background()
+		member := memberFixture("member-session", "session@example.com")
+		mustCreateMember(t, ctx, repository, member)
+		session := domain.Session{ID: "session-1", TokenHash: "sha256-hash", MemberID: member.ID, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}
+		if err := repository.CreateSession(ctx, session); err != nil {
+			t.Fatalf("CreateSession() error = %v", err)
+		}
+		got, err := repository.GetSessionByTokenHash(ctx, "sha256-hash")
+		if err != nil || got.ID != session.ID {
+			t.Fatalf("GetSessionByTokenHash() = %#v, %v", got, err)
+		}
+		if err := repository.DeleteSessionByTokenHash(ctx, "sha256-hash"); err != nil {
+			t.Fatalf("DeleteSessionByTokenHash() error = %v", err)
+		}
+		if _, err := repository.GetSessionByTokenHash(ctx, "sha256-hash"); !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("deleted session error = %v", err)
+		}
+	})
+
+	t.Run("consumes an OIDC flow once", func(t *testing.T) {
+		repository := factory(t)
+		ctx := context.Background()
+		flow := domain.AuthFlow{StateHash: "state-hash", Nonce: "nonce", PKCEVerifier: "verifier", CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Minute)}
+		if err := repository.CreateAuthFlow(ctx, flow); err != nil {
+			t.Fatalf("CreateAuthFlow() error = %v", err)
+		}
+		got, err := repository.ConsumeAuthFlow(ctx, "state-hash")
+		if err != nil || got.Nonce != "nonce" {
+			t.Fatalf("ConsumeAuthFlow() = %#v, %v", got, err)
+		}
+		if _, err := repository.ConsumeAuthFlow(ctx, "state-hash"); !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("replayed flow error = %v", err)
+		}
+	})
+
 	t.Run("rolls back a failed transaction", func(t *testing.T) {
 		repository := factory(t)
 		ctx := context.Background()

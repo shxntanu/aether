@@ -5,14 +5,20 @@ import (
 	"strings"
 )
 
+// TagID uniquely identifies a reusable tag.
 type TagID string
 
+// Tag retains display spelling while providing a case-insensitive key.
 type Tag struct {
-	ID             TagID
-	DisplayName    string
-	NormalizedName string
+	// ID uniquely identifies the reusable tag.
+	ID TagID `json:"id"`
+	// DisplayName retains the first accepted spelling.
+	DisplayName string `json:"displayName"`
+	// NormalizedName is the case-insensitive identity used for matching.
+	NormalizedName string `json:"normalizedName"`
 }
 
+// NewTag validates and normalizes a reusable tag name.
 func NewTag(id TagID, name string) (Tag, error) {
 	displayName := strings.Join(strings.Fields(name), " ")
 	if displayName == "" {

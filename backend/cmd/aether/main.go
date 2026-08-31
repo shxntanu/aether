@@ -16,6 +16,8 @@ import (
 	"github.com/shxntanu/aether/backend/internal/httpapi"
 	"github.com/shxntanu/aether/backend/internal/identity"
 	"github.com/shxntanu/aether/backend/internal/server"
+	localstorage "github.com/shxntanu/aether/backend/internal/storage/local"
+	"github.com/shxntanu/aether/backend/internal/vault"
 )
 
 func main() {
@@ -39,7 +41,12 @@ func main() {
 			log.Fatalf("open catalog: %v", err)
 		}
 		defer func() { _ = store.Close() }()
-		provider, err := identity.NewGoogleProvider(ctx, settings.GoogleClientID, settings.GoogleClientSecret, settings.GoogleRedirectURL)
+		provider, err := identity.NewGoogleProvider(
+			ctx,
+			settings.GoogleClientID,
+			settings.GoogleClientSecret,
+			settings.GoogleRedirectURL,
+		)
 		if err != nil {
 			log.Fatalf("configure Google OIDC: %v", err)
 		}
@@ -48,7 +55,17 @@ func main() {
 			log.Fatalf("bootstrap administrator: %v", err)
 		}
 		oidcService := identity.NewOIDCService(store, provider, time.Now, newSecret)
-		router = httpapi.NewRouter(httpapi.Options{Identity: identityService, OIDC: oidcService, SecureCookies: settings.SecureCookies})
+		objects, err := localstorage.New(settings.LocalStoragePath)
+		if err != nil {
+			log.Fatalf("configure local object storage: %v", err)
+		}
+		vaultService := vault.NewService(store, objects)
+		router = httpapi.NewRouter(httpapi.Options{
+			Identity:      identityService,
+			OIDC:          oidcService,
+			Vault:         vaultService,
+			SecureCookies: settings.SecureCookies,
+		})
 	}
 	log.Printf("Aether API listening on %s", listener.Addr())
 	if err := server.Serve(ctx, listener, router, settings.ShutdownTimeout); err != nil {

@@ -19,6 +19,16 @@ type Config struct {
 	StorageProvider string
 	// LocalStoragePath is the persistent root used by the local provider.
 	LocalStoragePath string
+	// GoogleDriveClientID identifies the vault-owner Drive OAuth client.
+	GoogleDriveClientID string
+	// GoogleDriveClientSecret authenticates the vault-owner Drive OAuth client.
+	GoogleDriveClientSecret string
+	// GoogleDriveRedirectURL is the exact Drive-owner OAuth callback.
+	GoogleDriveRedirectURL string
+	// GoogleDriveFolderID is the app-managed Drive folder for vault objects.
+	GoogleDriveFolderID string
+	// GoogleDriveRefreshToken is the deployment secret for offline Drive access.
+	GoogleDriveRefreshToken string
 	// GoogleClientID identifies the Google OIDC web client.
 	GoogleClientID string
 	// GoogleClientSecret authenticates the Google OIDC web client.
@@ -53,11 +63,51 @@ func Load() (Config, error) {
 	if value := os.Getenv("AETHER_LOCAL_STORAGE_PATH"); value != "" {
 		config.LocalStoragePath = value
 	}
-	if config.StorageProvider != "local" {
-		return Config{}, fmt.Errorf("AETHER_STORAGE_PROVIDER must be local")
+	if config.StorageProvider != "local" && config.StorageProvider != "gdrive" {
+		return Config{}, fmt.Errorf("AETHER_STORAGE_PROVIDER must be local or gdrive")
 	}
-	if config.LocalStoragePath == "" {
+	if config.StorageProvider == "local" && config.LocalStoragePath == "" {
 		return Config{}, fmt.Errorf("AETHER_LOCAL_STORAGE_PATH must not be empty")
+	}
+	config.GoogleDriveClientID = os.Getenv("AETHER_GDRIVE_CLIENT_ID")
+	config.GoogleDriveClientSecret = os.Getenv("AETHER_GDRIVE_CLIENT_SECRET")
+	config.GoogleDriveRedirectURL = os.Getenv("AETHER_GDRIVE_REDIRECT_URL")
+	config.GoogleDriveFolderID = os.Getenv("AETHER_GDRIVE_FOLDER_ID")
+	config.GoogleDriveRefreshToken = os.Getenv("AETHER_GDRIVE_REFRESH_TOKEN")
+	driveValues := []string{
+		config.GoogleDriveClientID,
+		config.GoogleDriveClientSecret,
+		config.GoogleDriveRedirectURL,
+		config.GoogleDriveFolderID,
+		config.GoogleDriveRefreshToken,
+	}
+	configuredDriveValues := 0
+	for _, value := range driveValues {
+		if value != "" {
+			configuredDriveValues++
+		}
+	}
+	if configuredDriveValues != 0 && configuredDriveValues != len(driveValues) {
+		return Config{}, fmt.Errorf(
+			"Google Drive storage requires client ID, client secret, redirect URL, " +
+				"folder ID, and refresh token",
+		)
+	}
+	if config.StorageProvider == "gdrive" && configuredDriveValues != len(driveValues) {
+		return Config{}, fmt.Errorf(
+			"AETHER_STORAGE_PROVIDER=gdrive requires complete Google Drive configuration",
+		)
+	}
+	if configuredDriveValues == len(driveValues) {
+		parsed, err := url.Parse(config.GoogleDriveRedirectURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" ||
+			parsed.Path != "/auth/gdrive/callback" || parsed.RawQuery != "" ||
+			parsed.Fragment != "" {
+			return Config{}, fmt.Errorf(
+				"AETHER_GDRIVE_REDIRECT_URL must be an absolute URL with exact path " +
+					"/auth/gdrive/callback and no query or fragment",
+			)
+		}
 	}
 	config.GoogleClientID = os.Getenv("AETHER_GOOGLE_CLIENT_ID")
 	config.GoogleClientSecret = os.Getenv("AETHER_GOOGLE_CLIENT_SECRET")

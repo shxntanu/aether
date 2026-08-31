@@ -10,7 +10,10 @@ func TestLoadUsesDevelopmentDefaults(t *testing.T) {
 	t.Setenv("AETHER_HTTP_ADDRESS", "")
 	t.Setenv("AETHER_SHUTDOWN_TIMEOUT", "")
 	t.Setenv("AETHER_DATABASE_URL", "")
+	t.Setenv("AETHER_STORAGE_PROVIDER", "")
+	t.Setenv("AETHER_LOCAL_STORAGE_PATH", "")
 	clearIdentityEnvironment(t)
+	clearDriveEnvironment(t)
 
 	got, err := Load()
 	if err != nil {
@@ -27,12 +30,18 @@ func TestLoadUsesDevelopmentDefaults(t *testing.T) {
 	if got.DatabaseURL != wantDatabaseURL {
 		t.Fatalf("DatabaseURL = %q, want %q", got.DatabaseURL, wantDatabaseURL)
 	}
+	if got.StorageProvider != "local" || got.LocalStoragePath != "./data/vault" {
+		t.Fatalf("storage defaults = %#v", got)
+	}
 }
 
 func TestLoadUsesEnvironmentOverrides(t *testing.T) {
 	t.Setenv("AETHER_HTTP_ADDRESS", "127.0.0.1:9000")
 	t.Setenv("AETHER_SHUTDOWN_TIMEOUT", "25s")
 	t.Setenv("AETHER_DATABASE_URL", "postgres://hosted.example/aether")
+	t.Setenv("AETHER_STORAGE_PROVIDER", "local")
+	t.Setenv("AETHER_LOCAL_STORAGE_PATH", "/srv/aether/vault")
+	clearDriveEnvironment(t)
 	t.Setenv("AETHER_GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("AETHER_GOOGLE_CLIENT_SECRET", "client-secret")
 	t.Setenv("AETHER_GOOGLE_REDIRECT_URL", "https://vault.example/auth/google/callback")
@@ -53,8 +62,59 @@ func TestLoadUsesEnvironmentOverrides(t *testing.T) {
 	if got.DatabaseURL != "postgres://hosted.example/aether" {
 		t.Fatalf("DatabaseURL = %q, want hosted provider URL", got.DatabaseURL)
 	}
+	if got.StorageProvider != "local" || got.LocalStoragePath != "/srv/aether/vault" {
+		t.Fatalf("storage configuration = %#v", got)
+	}
 	if got.GoogleClientID != "client-id" || got.GoogleRedirectURL != "https://vault.example/auth/google/callback" || !got.SecureCookies {
 		t.Fatalf("identity configuration = %#v", got)
+	}
+}
+
+func TestLoadAcceptsCompleteGoogleDriveConfiguration(t *testing.T) {
+	clearIdentityEnvironment(t)
+	clearDriveEnvironment(t)
+	t.Setenv("AETHER_STORAGE_PROVIDER", "gdrive")
+	t.Setenv("AETHER_GDRIVE_CLIENT_ID", "drive-client")
+	t.Setenv("AETHER_GDRIVE_CLIENT_SECRET", "drive-secret")
+	t.Setenv("AETHER_GDRIVE_REDIRECT_URL", "https://vault.example/auth/gdrive/callback")
+	t.Setenv("AETHER_GDRIVE_FOLDER_ID", "folder-id")
+	t.Setenv("AETHER_GDRIVE_REFRESH_TOKEN", "refresh-token")
+
+	got, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if got.StorageProvider != "gdrive" || got.GoogleDriveFolderID != "folder-id" {
+		t.Fatalf("Drive configuration = %#v", got)
+	}
+}
+
+func TestLoadRejectsIncompleteGoogleDriveConfiguration(t *testing.T) {
+	clearIdentityEnvironment(t)
+	clearDriveEnvironment(t)
+	t.Setenv("AETHER_STORAGE_PROVIDER", "gdrive")
+	t.Setenv("AETHER_GDRIVE_CLIENT_ID", "drive-client")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want incomplete Drive configuration error")
+	}
+}
+
+func TestLoadRejectsInexactGoogleDriveRedirect(t *testing.T) {
+	clearIdentityEnvironment(t)
+	clearDriveEnvironment(t)
+	for key, value := range map[string]string{
+		"AETHER_STORAGE_PROVIDER":     "gdrive",
+		"AETHER_GDRIVE_CLIENT_ID":     "drive-client",
+		"AETHER_GDRIVE_CLIENT_SECRET": "drive-secret",
+		"AETHER_GDRIVE_REDIRECT_URL":  "https://vault.example/callback",
+		"AETHER_GDRIVE_FOLDER_ID":     "folder-id",
+		"AETHER_GDRIVE_REFRESH_TOKEN": "refresh-token",
+	} {
+		t.Setenv(key, value)
+	}
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() error = nil, want invalid Drive redirect error")
 	}
 }
 
@@ -82,6 +142,19 @@ func TestLoadRejectsPartialOrInexactOIDCConfiguration(t *testing.T) {
 func clearIdentityEnvironment(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{"AETHER_GOOGLE_CLIENT_ID", "AETHER_GOOGLE_CLIENT_SECRET", "AETHER_GOOGLE_REDIRECT_URL", "AETHER_BOOTSTRAP_ADMIN_EMAIL", "AETHER_SECURE_COOKIES"} {
+		t.Setenv(key, "")
+	}
+}
+
+func clearDriveEnvironment(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"AETHER_GDRIVE_CLIENT_ID",
+		"AETHER_GDRIVE_CLIENT_SECRET",
+		"AETHER_GDRIVE_REDIRECT_URL",
+		"AETHER_GDRIVE_FOLDER_ID",
+		"AETHER_GDRIVE_REFRESH_TOKEN",
+	} {
 		t.Setenv(key, "")
 	}
 }

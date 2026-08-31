@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"github.com/shxntanu/aether/backend/internal/httpapi"
 	"github.com/shxntanu/aether/backend/internal/identity"
 	"github.com/shxntanu/aether/backend/internal/server"
+	"github.com/shxntanu/aether/backend/internal/storage"
+	"github.com/shxntanu/aether/backend/internal/storage/gdrive"
 	localstorage "github.com/shxntanu/aether/backend/internal/storage/local"
 	"github.com/shxntanu/aether/backend/internal/vault"
 )
@@ -55,9 +58,9 @@ func main() {
 			log.Fatalf("bootstrap administrator: %v", err)
 		}
 		oidcService := identity.NewOIDCService(store, provider, time.Now, newSecret)
-		objects, err := localstorage.New(settings.LocalStoragePath)
+		objects, err := configureObjectStore(ctx, settings)
 		if err != nil {
-			log.Fatalf("configure local object storage: %v", err)
+			log.Fatalf("configure %s object storage: %v", settings.StorageProvider, err)
 		}
 		vaultService := vault.NewService(store, objects)
 		router = httpapi.NewRouter(httpapi.Options{
@@ -70,6 +73,26 @@ func main() {
 	log.Printf("Aether API listening on %s", listener.Addr())
 	if err := server.Serve(ctx, listener, router, settings.ShutdownTimeout); err != nil {
 		log.Fatalf("serve HTTP: %v", err)
+	}
+}
+
+func configureObjectStore(
+	ctx context.Context,
+	settings config.Config,
+) (storage.ObjectStore, error) {
+	switch settings.StorageProvider {
+	case "local":
+		return localstorage.New(settings.LocalStoragePath)
+	case "gdrive":
+		return gdrive.New(ctx, gdrive.Config{
+			ClientID:     settings.GoogleDriveClientID,
+			ClientSecret: settings.GoogleDriveClientSecret,
+			RedirectURL:  settings.GoogleDriveRedirectURL,
+			FolderID:     settings.GoogleDriveFolderID,
+			RefreshToken: settings.GoogleDriveRefreshToken,
+		})
+	default:
+		return nil, fmt.Errorf("unsupported storage provider %q", settings.StorageProvider)
 	}
 }
 

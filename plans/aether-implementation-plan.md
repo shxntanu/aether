@@ -136,11 +136,11 @@ Acceptance: only allowlisted active accounts enter the vault, and only administr
 ### 4. Local Tagged Vault Vertical Slice
 
 - [ ] Implement the local-filesystem `ObjectStore` adapter and its contract tests.
-- [ ] Stream uploads through Go while enforcing type/size limits and calculating SHA-256.
-- [ ] Derive the initial title from the filename and accept optional reusable tags.
-- [ ] Implement listing, tag autocomplete, all/any tag filtering, metadata edits, preview, and range downloads.
+- [x] Stream uploads through Go while enforcing type/size limits and calculating SHA-256.
+- [x] Derive the initial title from the filename and accept optional reusable tags.
+- [x] Implement listing, tag autocomplete, all/any tag filtering, metadata edits, preview, and range downloads.
 - [ ] Build the corresponding responsive React screens and browser tests.
-- [ ] Add inline versioned manifests and surface manifest-write failures for repair.
+- [x] Add inline versioned manifests and surface manifest-write failures for repair.
 
 Acceptance: an allowlisted user can upload an optionally tagged document, retrieve it by tags, edit its metadata, preview it, and download identical bytes.
 

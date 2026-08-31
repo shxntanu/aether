@@ -1,4 +1,4 @@
-.PHONY: backend-fmt backend-run backend-test backend-vet dev frontend-build frontend-dev frontend-lint frontend-test test
+.PHONY: backend-fmt backend-run backend-test backend-test-postgres backend-vet dev frontend-build frontend-dev frontend-lint frontend-test test
 
 backend-fmt:
 	cd backend && gofmt -w $$(find . -name '*.go' -type f)
@@ -8,6 +8,10 @@ backend-run:
 
 backend-test:
 	cd backend && go test ./...
+
+backend-test-postgres:
+	@test -n "$$AETHER_TEST_POSTGRES_URL" || (echo "AETHER_TEST_POSTGRES_URL must point to a disposable PostgreSQL database" && exit 1)
+	cd backend && go test -count=1 ./internal/catalog/postgres
 
 backend-vet:
 	cd backend && go vet ./...

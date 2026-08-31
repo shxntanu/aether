@@ -103,23 +103,23 @@ Uploads use multipart streaming, `Idempotency-Key`, signature-based MIME validat
 
 ### 1. Monorepo and Tested Go Service
 
-- [ ] Move the Go module to `backend/` using module path `github.com/shxntanu/aether/backend`.
-- [ ] Write a failing handler test for `GET /api/v1/health`.
-- [ ] Implement the minimal router and executable required to pass the test.
-- [ ] Add graceful shutdown and configuration loading through tested functions.
-- [ ] Scaffold the Vite React/TypeScript application under `frontend/`.
-- [ ] Configure the Vite development proxy and prove the browser can read the Go health endpoint.
-- [ ] Add root `Makefile` commands for formatting, testing, and running both applications.
+- [x] Move the Go module to `backend/` using module path `github.com/shxntanu/aether/backend`.
+- [x] Write a failing handler test for `GET /api/v1/health`.
+- [x] Implement the minimal router and executable required to pass the test.
+- [x] Add graceful shutdown and configuration loading through tested functions.
+- [x] Scaffold the Vite React/TypeScript application under `frontend/`.
+- [x] Configure the Vite development proxy and prove the browser can read the Go health endpoint.
+- [x] Add root `Makefile` commands for formatting, testing, and running both applications.
 
 Acceptance: backend and frontend start independently, the health test passes, and the browser reaches the API through the development proxy.
 
 ### 2. Catalog and Domain Foundations
 
-- [ ] Define document, tag, member, and audit domain types without database-specific fields.
-- [ ] Add explicit repository interfaces and PostgreSQL migrations.
-- [ ] Implement repository contract tests against containerized PostgreSQL.
-- [ ] Add lifecycle-transition and optimistic-concurrency tests before implementing document persistence.
-- [ ] Add PostgreSQL configuration profiles for local containers and hosted providers.
+- [x] Define document, tag, member, and audit domain types without database-specific fields.
+- [x] Add explicit repository interfaces and PostgreSQL migrations.
+- [x] Implement repository contract tests against containerized PostgreSQL.
+- [x] Add lifecycle-transition and optimistic-concurrency tests before implementing document persistence.
+- [x] Add PostgreSQL configuration profiles for local containers and hosted providers.
 
 Acceptance: the domain and repository contract tests pass against containerized PostgreSQL, including conflict and rollback cases.
 

@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 var (
@@ -21,6 +22,17 @@ type Repository interface {
 	GetDocument(ctx context.Context, id DocumentID) (Document, error)
 	// UpdateDocument applies metadata changes only when expectedVersion matches.
 	UpdateDocument(ctx context.Context, document Document, expectedVersion int64) (Document, error)
+	// ListDocuments returns ready documents matching optional tag constraints.
+	ListDocuments(ctx context.Context, options DocumentListOptions) ([]Document, error)
+	// ClaimUpload binds an uploader's idempotency digest to one document ID.
+	// It returns the prior document ID and false when the digest already exists.
+	ClaimUpload(
+		ctx context.Context,
+		uploaderID MemberID,
+		keyHash string,
+		documentID DocumentID,
+		createdAt time.Time,
+	) (DocumentID, bool, error)
 
 	// CreateTag persists a new reusable tag.
 	CreateTag(ctx context.Context, tag Tag) error
@@ -30,6 +42,10 @@ type Repository interface {
 	AttachTag(ctx context.Context, documentID DocumentID, tagID TagID) error
 	// ListDocumentTags returns all tags associated with a document.
 	ListDocumentTags(ctx context.Context, documentID DocumentID) ([]Tag, error)
+	// ReplaceDocumentTags atomically replaces a document's tag associations.
+	ReplaceDocumentTags(ctx context.Context, documentID DocumentID, tagIDs []TagID) error
+	// ListTags returns reusable tags whose normalized names contain query.
+	ListTags(ctx context.Context, query string, limit int) ([]Tag, error)
 
 	// CreateMember persists a new allowlisted member.
 	CreateMember(ctx context.Context, member Member) error

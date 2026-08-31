@@ -1,0 +1,56 @@
+// Package storage defines provider-neutral object persistence used by the
+// document vault. Provider packages implement this contract without exposing
+// provider credentials or URLs to callers.
+package storage
+
+import (
+	"context"
+	"errors"
+	"io"
+	"time"
+)
+
+// ErrNotFound indicates that an object key does not exist.
+var ErrNotFound = errors.New("object not found")
+
+// ByteRange is an inclusive range within an object.
+type ByteRange struct {
+	// Start is the zero-based first included byte.
+	Start int64
+	// End is the zero-based last included byte.
+	End int64
+}
+
+// PutOptions describes metadata stored with an object.
+type PutOptions struct {
+	// ContentType is the trusted application-detected media type.
+	ContentType string
+}
+
+// ObjectInfo describes a stored object's provider-neutral metadata.
+type ObjectInfo struct {
+	// Key is the opaque provider-neutral object key.
+	Key string
+	// Size is the stored object size in bytes.
+	Size int64
+	// ContentType is the application-supplied media type when known.
+	ContentType string
+	// LastModified is the provider's object modification time.
+	LastModified time.Time
+}
+
+// ObjectStore persists immutable document objects behind opaque keys.
+type ObjectStore interface {
+	// Put streams an object to key, replacing an existing object atomically.
+	Put(context.Context, string, io.Reader, PutOptions) (ObjectInfo, error)
+	// OpenRange opens all bytes or the requested inclusive byte range.
+	OpenRange(context.Context, string, *ByteRange) (io.ReadCloser, ObjectInfo, error)
+	// Stat returns metadata without opening the object body.
+	Stat(context.Context, string) (ObjectInfo, error)
+	// Trash makes an object unavailable while preserving it for restoration.
+	Trash(context.Context, string) error
+	// Restore makes a previously trashed object available again.
+	Restore(context.Context, string) error
+	// Delete permanently removes an object and any trashed copy.
+	Delete(context.Context, string) error
+}

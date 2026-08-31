@@ -9,8 +9,11 @@ import (
 
 	"github.com/shxntanu/aether/backend/internal/domain"
 	"github.com/shxntanu/aether/backend/internal/identity"
+	"github.com/shxntanu/aether/backend/internal/storage"
+	"github.com/shxntanu/aether/backend/internal/vault"
 )
 
+// SessionCookieName is the browser cookie containing the opaque session token.
 const SessionCookieName = "aether_session"
 
 // IdentityService provides membership administration and session operations
@@ -43,14 +46,46 @@ type OIDCService interface {
 	Complete(context.Context, string, string) (identity.Identity, error)
 }
 
+// VaultService provides tagged document operations required by HTTP handlers.
+type VaultService interface {
+	// Upload stores an immutable original and its initial metadata.
+	Upload(context.Context, vault.Upload) (vault.DocumentRecord, error)
+	// Get returns a ready document and its tags.
+	Get(context.Context, domain.DocumentID) (vault.DocumentRecord, error)
+	// List returns ready documents matching optional tag filters.
+	List(context.Context, []string, domain.TagMatch) ([]vault.DocumentRecord, error)
+	// UpdateMetadata changes title and tags using optimistic concurrency.
+	UpdateMetadata(
+		context.Context,
+		domain.DocumentID,
+		vault.MetadataUpdate,
+	) (vault.DocumentRecord, error)
+	// ListTags returns reusable tags for autocomplete.
+	ListTags(context.Context, string, int) ([]domain.Tag, error)
+	// CreateTag creates or returns a reusable tag.
+	CreateTag(context.Context, string) (domain.Tag, error)
+	// OpenContent opens a whole document or requested byte range.
+	OpenContent(
+		context.Context,
+		domain.DocumentID,
+		*storage.ByteRange,
+	) (vault.Content, error)
+}
+
+// Options supplies optional application services to NewRouter.
 type Options struct {
-	Identity      IdentityService
-	OIDC          OIDCService
+	// Identity authenticates sessions and manages membership.
+	Identity IdentityService
+	// OIDC starts and completes Google login when configured.
+	OIDC OIDCService
+	// Vault enables authenticated document and tag routes when configured.
+	Vault VaultService
+	// SecureCookies restricts session cookies to HTTPS.
 	SecureCookies bool
 }
 
 // NewRouter creates the public API router. With no options it exposes only the
-// health endpoint; identity routes are registered when both services exist.
+// health endpoint; each configured service enables its corresponding routes.
 func NewRouter(options ...Options) http.Handler {
 	var opts Options
 	if len(options) > 0 {
@@ -60,9 +95,20 @@ func NewRouter(options ...Options) http.Handler {
 	mux.HandleFunc("GET /api/v1/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-	if opts.Identity == nil || opts.OIDC == nil {
+	if opts.Identity == nil {
 		return mux
 	}
+	if opts.OIDC != nil {
+		registerOIDCRoutes(mux, opts)
+	}
+	registerIdentityRoutes(mux, opts)
+	if opts.Vault != nil {
+		registerVaultRoutes(mux, opts.Identity, opts.Vault)
+	}
+	return mux
+}
+
+func registerOIDCRoutes(mux *http.ServeMux, opts Options) {
 	mux.HandleFunc("GET /auth/google/start", func(w http.ResponseWriter, r *http.Request) {
 		location, err := opts.OIDC.Start(r.Context())
 		if err != nil {
@@ -89,6 +135,9 @@ func NewRouter(options ...Options) http.Handler {
 		http.SetCookie(w, sessionCookie(token, opts.SecureCookies, 7*24*60*60))
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	})
+}
+
+func registerIdentityRoutes(mux *http.ServeMux, opts Options) {
 	mux.HandleFunc("POST /api/v1/logout", func(w http.ResponseWriter, r *http.Request) {
 		cookie, _ := r.Cookie(SessionCookieName)
 		if cookie != nil {
@@ -140,7 +189,6 @@ func NewRouter(options ...Options) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, member)
 	})))
-	return mux
 }
 
 type memberContextKey struct{}

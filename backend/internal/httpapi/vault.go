@@ -6,6 +6,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -44,6 +45,21 @@ func registerVaultRoutes(
 			handleDocumentPatch(w, r, vaultService)
 		},
 	)))
+	mux.Handle("DELETE /api/v1/documents/{id}", memberRoute(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			handleDocumentDelete(w, r, vaultService)
+		},
+	)))
+	mux.Handle("POST /api/v1/documents/{id}/restore", requireAdmin(identityService, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			handleDocumentRestore(w, r, vaultService)
+		},
+	)))
+	mux.Handle("DELETE /api/v1/documents/{id}/purge", requireAdmin(identityService, http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			handleDocumentPurge(w, r, vaultService)
+		},
+	)))
 	mux.Handle("GET /api/v1/documents/{id}/content", memberRoute(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			handleDocumentContent(w, r, vaultService)
@@ -59,6 +75,35 @@ func registerVaultRoutes(
 			handleTagCreate(w, r, vaultService)
 		},
 	)))
+}
+
+func handleDocumentDelete(w http.ResponseWriter, r *http.Request, service VaultService) {
+	if err := service.Delete(r.Context(), domain.DocumentID(r.PathValue("id"))); err != nil {
+		writeVaultError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func handleDocumentRestore(w http.ResponseWriter, r *http.Request, service VaultService) {
+	record, err := service.Restore(r.Context(), domain.DocumentID(r.PathValue("id")))
+	if err != nil {
+		writeVaultError(w, err)
+		return
+	}
+	writeRecord(w, http.StatusOK, record)
+}
+
+func handleDocumentPurge(w http.ResponseWriter, r *http.Request, service VaultService) {
+	if err := service.Purge(
+		r.Context(),
+		domain.DocumentID(r.PathValue("id")),
+		vault.EnforceRetention,
+	); err != nil {
+		writeVaultError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func handleDocumentUpload(w http.ResponseWriter, r *http.Request, service VaultService) {
@@ -167,15 +212,18 @@ func handleDocumentContent(w http.ResponseWriter, r *http.Request, service Vault
 	defer content.Body.Close()
 	w.Header().Set("Accept-Ranges", "bytes")
 	w.Header().Set("Content-Type", content.Document.MediaType)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
 	disposition := "inline"
 	if r.URL.Query().Get("download") == "true" {
 		disposition = "attachment"
 	}
 	w.Header().Set("Content-Disposition", mime.FormatMediaType(
 		disposition,
-		map[string]string{"filename": content.Document.OriginalFilename},
+		map[string]string{"filename": sanitizedFilename(content.Document.OriginalFilename)},
 	))
+	if disposition == "inline" {
+		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	length := content.Document.SizeBytes
 	status := http.StatusOK
 	if content.ByteRange != nil {
@@ -248,9 +296,28 @@ func writeVaultError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusRequestedRangeNotSatisfiable, "invalid_range")
 	case errors.Is(err, vault.ErrUploadInProgress):
 		writeError(w, http.StatusConflict, "upload_in_progress")
+	case errors.Is(err, vault.ErrRetentionActive):
+		writeError(w, http.StatusConflict, "retention_active")
 	default:
 		writeError(w, http.StatusInternalServerError, "vault_error")
 	}
+}
+
+func sanitizedFilename(filename string) string {
+	filename = strings.TrimSpace(strings.ReplaceAll(filename, "\\", "/"))
+	filename = filepath.Base(filename)
+	filename = strings.ToValidUTF8(filename, "_")
+	filename = strings.Map(func(character rune) rune {
+		if character < 0x20 || character == 0x7f {
+			return '_'
+		}
+		return character
+	}, filename)
+	if filename == "" || filename == "." || filename == ".." ||
+		filename == string(filepath.Separator) {
+		return "download"
+	}
+	return filename
 }
 
 func parseRange(value string) (*storage.ByteRange, error) {

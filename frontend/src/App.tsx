@@ -39,20 +39,41 @@ type ApiResult = {
 
 type RequestOptions = RequestInit;
 
+let csrfToken: string | null = null;
+
 /** Sends a same-origin API request and preserves enough response detail to debug it. */
 async function callApi(path: string, options: RequestOptions = {}): Promise<ApiResult> {
   const startedAt = performance.now();
+  const request: RequestInit = { credentials: "same-origin", ...options };
+  const method = (request.method ?? "GET").toUpperCase();
+  if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && csrfToken) {
+    const headers = new Headers(request.headers);
+    headers.set("X-CSRF-Token", csrfToken);
+    request.headers = headers;
+  }
+  if (path === "/api/v1/session") csrfToken = null;
   try {
-    const response = await fetch(path, { credentials: "same-origin", ...options });
+    const response = await fetch(path, request);
     const rawBody = await response.text();
     let body = rawBody;
     if (rawBody) {
       try {
-        body = JSON.stringify(JSON.parse(rawBody) as unknown, null, 2);
+        const parsedBody: unknown = JSON.parse(rawBody);
+        body = JSON.stringify(parsedBody, null, 2);
+        if (
+          path === "/api/v1/session" &&
+          typeof parsedBody === "object" &&
+          parsedBody !== null &&
+          "csrfToken" in parsedBody &&
+          typeof parsedBody.csrfToken === "string"
+        ) {
+          csrfToken = parsedBody.csrfToken;
+        }
       } catch {
         body = rawBody;
       }
     }
+    if (path === "/api/v1/logout" && response.ok) csrfToken = null;
     return {
       ok: response.ok,
       status: response.status,

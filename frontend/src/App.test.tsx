@@ -47,3 +47,26 @@ test("sends a document list request from its practical controls", async () => {
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
   expect(fetch).toHaveBeenLastCalledWith("/api/v1/documents?tag=tax&match=any", { credentials: "same-origin" });
 });
+
+test("sends the session CSRF token with document uploads", async () => {
+  const fetch = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
+    if (String(input) === "/api/v1/session") {
+      return Promise.resolve(jsonResponse({ csrfToken: "csrf-token" }));
+    }
+    return Promise.resolve(jsonResponse({ status: "ok" }));
+  });
+  vi.stubGlobal("fetch", fetch);
+
+  render(<App />);
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+
+  const file = new File(["image data"], "scan.png", { type: "image/png" });
+  fireEvent.change(screen.getByLabelText("Original file"), { target: { files: [file] } });
+  fireEvent.click(screen.getByRole("button", { name: "Send upload" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+  const request = fetch.mock.calls[2]?.[1];
+  expect(request).toBeDefined();
+  expect(request?.method).toBe("POST");
+  expect(new Headers(request?.headers).get("X-CSRF-Token")).toBe("csrf-token");
+});

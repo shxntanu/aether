@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shxntanu/aether/backend/internal/audit"
 	"github.com/shxntanu/aether/backend/internal/domain"
 )
 
@@ -54,11 +55,28 @@ type Service struct {
 	repository Repository
 	now        func() time.Time
 	newSecret  func() string
+	recorder   audit.Recorder
 }
 
-// NewService constructs a Service using injected clock and secret generators.
-func NewService(repository Repository, now func() time.Time, newSecret func() string) *Service {
-	return &Service{repository: repository, now: now, newSecret: newSecret}
+// NewService constructs a Service using injected clock, secret, and audit
+// recorder dependencies. A missing recorder leaves the service unconfigured;
+// security-sensitive membership mutations then fail closed after persistence.
+func NewService(
+	repository Repository,
+	now func() time.Time,
+	newSecret func() string,
+	recorders ...audit.Recorder,
+) *Service {
+	var recorder audit.Recorder
+	if len(recorders) > 0 {
+		recorder = recorders[0]
+	}
+	return &Service{
+		repository: repository,
+		now:        now,
+		newSecret:  newSecret,
+		recorder:   recorder,
+	}
 }
 
 // BootstrapAdmin creates the initial active administrator, or promotes the
@@ -203,7 +221,28 @@ func (s *Service) ListMembers(ctx context.Context) ([]domain.Member, error) {
 }
 
 // AddMember adds an active allowlisted member after validating email and role.
+// Call AddMemberWithActor when the administrator identity is available.
 func (s *Service) AddMember(ctx context.Context, email string, role domain.MemberRole) (domain.Member, error) {
+	return s.addMember(ctx, nil, email, role)
+}
+
+// AddMemberWithActor adds a member and records the administrator and target
+// IDs without deriving either value from request or process context.
+func (s *Service) AddMemberWithActor(
+	ctx context.Context,
+	actorID domain.MemberID,
+	email string,
+	role domain.MemberRole,
+) (domain.Member, error) {
+	return s.addMember(ctx, &actorID, email, role)
+}
+
+func (s *Service) addMember(
+	ctx context.Context,
+	actorID *domain.MemberID,
+	email string,
+	role domain.MemberRole,
+) (domain.Member, error) {
 	email = normalizeEmail(email)
 	address, err := mail.ParseAddress(email)
 	if err != nil || address.Address != email || !validRole(role) {
@@ -214,11 +253,36 @@ func (s *Service) AddMember(ctx context.Context, email string, role domain.Membe
 	if err := s.repository.CreateMember(ctx, member); err != nil {
 		return domain.Member{}, err
 	}
+	if err := s.recordMemberEvent(ctx, audit.ActionMemberCreate, actorID, member.ID); err != nil {
+		return domain.Member{}, fmt.Errorf("record member creation: %w", err)
+	}
 	return member, nil
 }
 
 // ChangeMember changes the role and active/disabled state of a member.
 func (s *Service) ChangeMember(ctx context.Context, id domain.MemberID, role domain.MemberRole, status domain.MemberStatus) (domain.Member, error) {
+	return s.changeMember(ctx, nil, id, role, status)
+}
+
+// ChangeMemberWithActor changes a member and records the administrator and
+// target IDs without persisting the changed role or status in the audit event.
+func (s *Service) ChangeMemberWithActor(
+	ctx context.Context,
+	actorID domain.MemberID,
+	id domain.MemberID,
+	role domain.MemberRole,
+	status domain.MemberStatus,
+) (domain.Member, error) {
+	return s.changeMember(ctx, &actorID, id, role, status)
+}
+
+func (s *Service) changeMember(
+	ctx context.Context,
+	actorID *domain.MemberID,
+	id domain.MemberID,
+	role domain.MemberRole,
+	status domain.MemberStatus,
+) (domain.Member, error) {
 	if !validRole(role) || (status != domain.MemberStatusActive && status != domain.MemberStatusDisabled) {
 		return domain.Member{}, fmt.Errorf("invalid member role or status")
 	}
@@ -227,7 +291,32 @@ func (s *Service) ChangeMember(ctx context.Context, id domain.MemberID, role dom
 		return domain.Member{}, err
 	}
 	member.Role, member.Status, member.UpdatedAt = role, status, s.now()
-	return s.repository.UpdateMember(ctx, member)
+	updated, err := s.repository.UpdateMember(ctx, member)
+	if err != nil {
+		return domain.Member{}, err
+	}
+	if err := s.recordMemberEvent(ctx, audit.ActionMemberChange, actorID, updated.ID); err != nil {
+		return domain.Member{}, fmt.Errorf("record member change: %w", err)
+	}
+	return updated, nil
+}
+
+func (s *Service) recordMemberEvent(
+	ctx context.Context,
+	action audit.Action,
+	actorID *domain.MemberID,
+	memberID domain.MemberID,
+) error {
+	if s.recorder == nil {
+		return errors.New("audit recorder is not configured")
+	}
+	return s.recorder.Record(ctx, audit.Event{
+		ActorID:    actorID,
+		Action:     action,
+		ObjectType: "member",
+		ObjectID:   string(memberID),
+		Outcome:    domain.AuditOutcomeSucceeded,
+	})
 }
 
 func validRole(role domain.MemberRole) bool {

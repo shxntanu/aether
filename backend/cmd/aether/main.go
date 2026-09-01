@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/shxntanu/aether/backend/internal/audit"
 	"github.com/shxntanu/aether/backend/internal/catalog/postgres"
 	"github.com/shxntanu/aether/backend/internal/config"
 	"github.com/shxntanu/aether/backend/internal/httpapi"
@@ -44,6 +45,11 @@ func main() {
 			log.Fatalf("open catalog: %v", err)
 		}
 		defer func() { _ = store.Close() }()
+		auditRecorder := audit.NewRecorder(
+			store,
+			time.Now,
+			func() (string, error) { return newSecret(), nil },
+		)
 		provider, err := identity.NewGoogleProvider(
 			ctx,
 			settings.GoogleClientID,
@@ -53,7 +59,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("configure Google OIDC: %v", err)
 		}
-		identityService := identity.NewService(store, time.Now, newSecret)
+		identityService := identity.NewService(store, time.Now, newSecret, auditRecorder)
 		if _, err := identityService.BootstrapAdmin(ctx, settings.BootstrapAdminEmail); err != nil {
 			log.Fatalf("bootstrap administrator: %v", err)
 		}
@@ -62,12 +68,13 @@ func main() {
 		if err != nil {
 			log.Fatalf("configure %s object storage: %v", settings.StorageProvider, err)
 		}
-		vaultService := vault.NewService(store, objects)
+		vaultService := vault.NewService(store, objects, auditRecorder)
 		router = httpapi.NewRouter(httpapi.Options{
 			Identity:      identityService,
 			OIDC:          oidcService,
 			Vault:         vaultService,
 			SecureCookies: settings.SecureCookies,
+			Audit:         auditRecorder,
 		})
 	}
 	log.Printf("Aether API listening on %s", listener.Addr())

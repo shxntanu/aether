@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shxntanu/aether/backend/internal/audit"
 	"github.com/shxntanu/aether/backend/internal/domain"
 	"github.com/shxntanu/aether/backend/internal/storage"
 )
@@ -51,6 +52,7 @@ type Service struct {
 	objects    storage.ObjectStore
 	now        func() time.Time
 	newID      func() (string, error)
+	recorder   audit.Recorder
 }
 
 // DocumentRecord combines catalog metadata with its reusable tags.
@@ -85,6 +87,8 @@ type MetadataUpdate struct {
 	Tags []string
 	// ExpectedVersion must match the current catalog version.
 	ExpectedVersion int64
+	// ActorID identifies the member changing the metadata, when known.
+	ActorID *domain.MemberID
 }
 
 // Content is an opened document body and the metadata needed for HTTP ranges.
@@ -97,9 +101,25 @@ type Content struct {
 	ByteRange *storage.ByteRange
 }
 
-// NewService creates a vault service using the supplied catalog and object store.
-func NewService(repository Repository, objects storage.ObjectStore) *Service {
-	return &Service{repository: repository, objects: objects, now: time.Now, newID: randomID}
+// NewService creates a vault service using the supplied catalog, object store,
+// and optional audit recorder. A missing recorder makes successful mutations
+// fail closed after their required storage work completes.
+func NewService(
+	repository Repository,
+	objects storage.ObjectStore,
+	recorders ...audit.Recorder,
+) *Service {
+	var recorder audit.Recorder
+	if len(recorders) > 0 {
+		recorder = recorders[0]
+	}
+	return &Service{
+		repository: repository,
+		objects:    objects,
+		now:        time.Now,
+		newID:      randomID,
+		recorder:   recorder,
+	}
 }
 
 // Upload stores an original document, optional tags, and a versioned manifest.
@@ -218,6 +238,15 @@ func (s *Service) Upload(ctx context.Context, input Upload) (DocumentRecord, err
 		return DocumentRecord{}, err
 	}
 	document = s.writeManifest(ctx, document, tags)
+	actorID := input.Uploader
+	if err := s.recordDocumentEvent(
+		ctx,
+		audit.ActionDocumentUpload,
+		document.ID,
+		memberIDPointer(actorID),
+	); err != nil {
+		return DocumentRecord{}, fmt.Errorf("record document upload: %w", err)
+	}
 	return DocumentRecord{Document: document, Tags: tags}, nil
 }
 
@@ -319,6 +348,14 @@ func (s *Service) UpdateMetadata(
 		return DocumentRecord{}, err
 	}
 	document = s.writeManifest(ctx, document, tags)
+	if err := s.recordDocumentEvent(
+		ctx,
+		audit.ActionDocumentEdit,
+		document.ID,
+		input.ActorID,
+	); err != nil {
+		return DocumentRecord{}, fmt.Errorf("record document metadata edit: %w", err)
+	}
 	return DocumentRecord{Document: document, Tags: tags}, nil
 }
 
@@ -379,6 +416,119 @@ func (s *Service) OpenContent(
 		return Content{}, err
 	}
 	return Content{Body: body, Document: document, ByteRange: resolvedRange}, nil
+}
+
+// OpenContentByActor opens content and records the successful document access.
+// The opened body is closed if recording fails so callers cannot leak it.
+func (s *Service) OpenContentByActor(
+	ctx context.Context,
+	id domain.DocumentID,
+	byteRange *storage.ByteRange,
+	actorID domain.MemberID,
+) (Content, error) {
+	content, err := s.OpenContent(ctx, id, byteRange)
+	if err != nil {
+		return Content{}, err
+	}
+	if err := s.recordDocumentEvent(
+		ctx,
+		audit.ActionDocumentDownload,
+		content.Document.ID,
+		memberIDPointer(actorID),
+	); err != nil {
+		_ = content.Body.Close()
+		return Content{}, fmt.Errorf("record document download: %w", err)
+	}
+	return content, nil
+}
+
+// DeleteByActor soft-deletes a document and records the successful operation.
+func (s *Service) DeleteByActor(
+	ctx context.Context,
+	id domain.DocumentID,
+	actorID domain.MemberID,
+) error {
+	if err := s.Delete(ctx, id); err != nil {
+		return err
+	}
+	if err := s.recordDocumentEvent(
+		ctx,
+		audit.ActionDocumentDelete,
+		id,
+		memberIDPointer(actorID),
+	); err != nil {
+		return fmt.Errorf("record document deletion: %w", err)
+	}
+	return nil
+}
+
+// RestoreByActor restores a document and records the successful operation.
+func (s *Service) RestoreByActor(
+	ctx context.Context,
+	id domain.DocumentID,
+	actorID domain.MemberID,
+) (DocumentRecord, error) {
+	record, err := s.Restore(ctx, id)
+	if err != nil {
+		return DocumentRecord{}, err
+	}
+	if err := s.recordDocumentEvent(
+		ctx,
+		audit.ActionDocumentRestore,
+		id,
+		memberIDPointer(actorID),
+	); err != nil {
+		return DocumentRecord{}, fmt.Errorf("record document restoration: %w", err)
+	}
+	return record, nil
+}
+
+// PurgeByActor permanently removes a document and records the successful
+// operation after both storage objects and the catalog row are gone.
+func (s *Service) PurgeByActor(
+	ctx context.Context,
+	id domain.DocumentID,
+	policy PurgePolicy,
+	actorID domain.MemberID,
+) error {
+	if err := s.Purge(ctx, id, policy); err != nil {
+		return err
+	}
+	if err := s.recordDocumentEvent(
+		ctx,
+		audit.ActionDocumentPurge,
+		id,
+		memberIDPointer(actorID),
+	); err != nil {
+		return fmt.Errorf("record document purge: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) recordDocumentEvent(
+	ctx context.Context,
+	action audit.Action,
+	id domain.DocumentID,
+	actorID *domain.MemberID,
+) error {
+	if s.recorder == nil {
+		return errors.New("audit recorder is not configured")
+	}
+	return s.recorder.Record(ctx, audit.Event{
+		ActorID:    actorID,
+		Action:     action,
+		ObjectType: "document",
+		ObjectID:   string(id),
+		Outcome:    domain.AuditOutcomeSucceeded,
+	})
+}
+
+func memberIDPointer(id domain.MemberID) *domain.MemberID {
+	if id == "" {
+		return nil
+	}
+	copy := id
+	return &copy
 }
 
 func (s *Service) resolveAndReplaceTags(

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/shxntanu/aether/backend/internal/audit"
 	"github.com/shxntanu/aether/backend/internal/domain"
 	"github.com/shxntanu/aether/backend/internal/storage"
 	"github.com/shxntanu/aether/backend/internal/vault"
@@ -17,13 +19,39 @@ import (
 
 const multipartOverhead int64 = 1024 * 1024
 
+type actorVaultService interface {
+	DeleteByActor(context.Context, domain.DocumentID, domain.MemberID) error
+	RestoreByActor(
+		context.Context,
+		domain.DocumentID,
+		domain.MemberID,
+	) (vault.DocumentRecord, error)
+	PurgeByActor(
+		context.Context,
+		domain.DocumentID,
+		vault.PurgePolicy,
+		domain.MemberID,
+	) error
+	OpenContentByActor(
+		context.Context,
+		domain.DocumentID,
+		*storage.ByteRange,
+		domain.MemberID,
+	) (vault.Content, error)
+}
+
 func registerVaultRoutes(
 	mux *http.ServeMux,
 	identityService IdentityService,
 	vaultService VaultService,
+	recorder audit.Recorder,
 ) {
 	memberRoute := func(handler http.HandlerFunc) http.Handler {
-		return requireMember(identityService, handler)
+		return requireMember(
+			identityService,
+			recorder,
+			requireCSRF(identityService, recorder, handler),
+		)
 	}
 	mux.Handle("POST /api/v1/documents", memberRoute(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
@@ -50,12 +78,18 @@ func registerVaultRoutes(
 			handleDocumentDelete(w, r, vaultService)
 		},
 	)))
-	mux.Handle("POST /api/v1/documents/{id}/restore", requireAdmin(identityService, http.HandlerFunc(
+	mux.Handle("POST /api/v1/documents/{id}/restore", requireAdminWithCSRF(Options{
+		Identity: identityService,
+		Audit:    recorder,
+	}, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			handleDocumentRestore(w, r, vaultService)
 		},
 	)))
-	mux.Handle("DELETE /api/v1/documents/{id}/purge", requireAdmin(identityService, http.HandlerFunc(
+	mux.Handle("DELETE /api/v1/documents/{id}/purge", requireAdminWithCSRF(Options{
+		Identity: identityService,
+		Audit:    recorder,
+	}, http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			handleDocumentPurge(w, r, vaultService)
 		},
@@ -78,7 +112,18 @@ func registerVaultRoutes(
 }
 
 func handleDocumentDelete(w http.ResponseWriter, r *http.Request, service VaultService) {
-	if err := service.Delete(r.Context(), domain.DocumentID(r.PathValue("id"))); err != nil {
+	documentID := domain.DocumentID(r.PathValue("id"))
+	var err error
+	if actorService, ok := service.(actorVaultService); ok {
+		err = actorService.DeleteByActor(
+			r.Context(),
+			documentID,
+			memberFromContext(r.Context()).ID,
+		)
+	} else {
+		err = service.Delete(r.Context(), documentID)
+	}
+	if err != nil {
 		writeVaultError(w, err)
 		return
 	}
@@ -86,7 +131,18 @@ func handleDocumentDelete(w http.ResponseWriter, r *http.Request, service VaultS
 }
 
 func handleDocumentRestore(w http.ResponseWriter, r *http.Request, service VaultService) {
-	record, err := service.Restore(r.Context(), domain.DocumentID(r.PathValue("id")))
+	documentID := domain.DocumentID(r.PathValue("id"))
+	var record vault.DocumentRecord
+	var err error
+	if actorService, ok := service.(actorVaultService); ok {
+		record, err = actorService.RestoreByActor(
+			r.Context(),
+			documentID,
+			memberFromContext(r.Context()).ID,
+		)
+	} else {
+		record, err = service.Restore(r.Context(), documentID)
+	}
 	if err != nil {
 		writeVaultError(w, err)
 		return
@@ -95,11 +151,19 @@ func handleDocumentRestore(w http.ResponseWriter, r *http.Request, service Vault
 }
 
 func handleDocumentPurge(w http.ResponseWriter, r *http.Request, service VaultService) {
-	if err := service.Purge(
-		r.Context(),
-		domain.DocumentID(r.PathValue("id")),
-		vault.EnforceRetention,
-	); err != nil {
+	documentID := domain.DocumentID(r.PathValue("id"))
+	var err error
+	if actorService, ok := service.(actorVaultService); ok {
+		err = actorService.PurgeByActor(
+			r.Context(),
+			documentID,
+			vault.EnforceRetention,
+			memberFromContext(r.Context()).ID,
+		)
+	} else {
+		err = service.Purge(r.Context(), documentID, vault.EnforceRetention)
+	}
+	if err != nil {
 		writeVaultError(w, err)
 		return
 	}
@@ -185,6 +249,7 @@ func handleDocumentPatch(w http.ResponseWriter, r *http.Request, service VaultSe
 			Title:           input.Title,
 			Tags:            input.Tags,
 			ExpectedVersion: input.Version,
+			ActorID:         memberIDPointer(memberFromContext(r.Context()).ID),
 		},
 	)
 	if err != nil {
@@ -200,11 +265,18 @@ func handleDocumentContent(w http.ResponseWriter, r *http.Request, service Vault
 		writeError(w, http.StatusRequestedRangeNotSatisfiable, "invalid_range")
 		return
 	}
-	content, err := service.OpenContent(
-		r.Context(),
-		domain.DocumentID(r.PathValue("id")),
-		byteRange,
-	)
+	documentID := domain.DocumentID(r.PathValue("id"))
+	var content vault.Content
+	if actorService, ok := service.(actorVaultService); ok {
+		content, err = actorService.OpenContentByActor(
+			r.Context(),
+			documentID,
+			byteRange,
+			memberFromContext(r.Context()).ID,
+		)
+	} else {
+		content, err = service.OpenContent(r.Context(), documentID, byteRange)
+	}
 	if err != nil {
 		writeVaultError(w, err)
 		return

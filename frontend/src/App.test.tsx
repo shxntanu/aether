@@ -1,30 +1,49 @@
 // @vitest-environment jsdom
 
-import '@testing-library/jest-dom/vitest'
-import { render, screen } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import "@testing-library/jest-dom/vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
+import { cleanup } from "@testing-library/react";
 
-import App from './App'
+import App from "./App";
 
 afterEach(() => {
-  vi.unstubAllGlobals()
-})
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
-test('presents the coming-soon message without requesting API status', () => {
-  const fetch = vi.fn()
-  vi.stubGlobal('fetch', fetch)
-  vi.stubGlobal(
-    'matchMedia',
-    vi.fn().mockReturnValue({
-      addEventListener: vi.fn(),
-      matches: true,
-      removeEventListener: vi.fn(),
-    }),
-  )
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
-  render(<App />)
+test("loads the health and session probes on startup", async () => {
+  const fetch = vi.fn((input: RequestInfo | URL) => {
+    if (String(input) === "/api/v1/health") return Promise.resolve(jsonResponse({ status: "ok" }));
+    return Promise.resolve(jsonResponse({ error: "authentication_required" }, 401));
+  });
+  vi.stubGlobal("fetch", fetch);
 
-  expect(screen.getByRole('heading', { name: 'AETHER' })).toBeVisible()
-  expect(screen.getByText('COMING SOON')).toBeVisible()
-  expect(fetch).not.toHaveBeenCalled()
-})
+  render(<App />);
+
+  expect(screen.getByRole("heading", { name: "API bench" })).toBeVisible();
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  expect(screen.getByText(/"status": "ok"/)).toBeVisible();
+});
+
+test("sends a document list request from its practical controls", async () => {
+  const fetch = vi.fn(() => Promise.resolve(jsonResponse({ documents: [] })));
+  vi.stubGlobal("fetch", fetch);
+
+  render(<App />);
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+
+  fireEvent.change(screen.getByLabelText("Tag filter"), { target: { value: "tax" } });
+  fireEvent.change(screen.getByLabelText("Match"), { target: { value: "any" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run list request" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+  expect(fetch).toHaveBeenLastCalledWith("/api/v1/documents?tag=tax&match=any", { credentials: "same-origin" });
+});

@@ -10,12 +10,21 @@ import (
 )
 
 func (s *Store) CreateSession(ctx context.Context, session domain.Session) error {
-	_, err := s.executor.ExecContext(ctx, `INSERT INTO sessions (id, token_hash, member_id, created_at, expires_at) VALUES ($1,$2,$3,$4,$5)`, session.ID, session.TokenHash, session.MemberID, session.CreatedAt, session.ExpiresAt)
+	_, err := s.executor.ExecContext(ctx, `
+		INSERT INTO sessions (id, token_hash, csrf_hash, member_id, created_at, expires_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`, session.ID, session.TokenHash, session.CSRFHash, session.MemberID,
+		session.CreatedAt, session.ExpiresAt)
 	return translateError("create session", err)
 }
 func (s *Store) GetSessionByTokenHash(ctx context.Context, hash string) (domain.Session, error) {
 	var session domain.Session
-	err := s.executor.QueryRowContext(ctx, `SELECT id, token_hash, member_id, created_at, expires_at FROM sessions WHERE token_hash=$1`, hash).Scan(&session.ID, &session.TokenHash, &session.MemberID, &session.CreatedAt, &session.ExpiresAt)
+	err := s.executor.QueryRowContext(ctx, `
+		SELECT id, token_hash, csrf_hash, member_id, created_at, expires_at
+		FROM sessions
+		WHERE token_hash = $1
+	`, hash).Scan(&session.ID, &session.TokenHash, &session.CSRFHash,
+		&session.MemberID, &session.CreatedAt, &session.ExpiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Session{}, fmt.Errorf("get session: %w", domain.ErrNotFound)
 	}

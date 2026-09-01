@@ -116,24 +116,36 @@ func (s *Store) UpdateDocument(
 	return s.GetDocument(ctx, document.ID)
 }
 
-// ListDocuments returns ready documents matching optional normalized tags.
+// ListDocuments returns documents matching validated lifecycle and tag filters.
 func (s *Store) ListDocuments(
 	ctx context.Context,
 	options domain.DocumentListOptions,
 ) ([]domain.Document, error) {
+	queryPlan, err := buildDocumentListQuery(options)
+	if err != nil {
+		return nil, err
+	}
+
 	query := `
 		SELECT d.id, d.title, d.original_filename, d.media_type, d.size_bytes,
 		       d.sha256, d.storage_key, d.status, d.index_status, d.uploader_id,
 		       d.version, d.created_at, d.updated_at, d.deleted_at, d.purge_after,
 		       d.manifest_error
 		FROM documents d
-		WHERE d.status = 'ready'`
-	arguments := make([]any, 0, len(options.NormalizedTags)+1)
+		WHERE ` + queryPlan.statusClause
+	arguments := make([]any, 0, len(options.NormalizedTags)+2)
+	if queryPlan.purgeDueBefore != nil {
+		arguments = append(arguments, queryPlan.purgeDueBefore.UTC())
+		query += fmt.Sprintf(
+			" AND d.purge_after IS NOT NULL AND d.purge_after <= $%d",
+			len(arguments),
+		)
+	}
 	if len(options.NormalizedTags) > 0 {
 		placeholders := make([]string, len(options.NormalizedTags))
 		for index, tag := range options.NormalizedTags {
 			arguments = append(arguments, tag)
-			placeholders[index] = fmt.Sprintf("$%d", index+1)
+			placeholders[index] = fmt.Sprintf("$%d", len(arguments))
 		}
 		query += ` AND d.id IN (
 			SELECT dt.document_id
@@ -141,13 +153,17 @@ func (s *Store) ListDocuments(
 			JOIN tags t ON t.id = dt.tag_id
 			WHERE t.normalized_name IN (` + strings.Join(placeholders, ",") + `)
 			GROUP BY dt.document_id`
-		if options.TagMatch != domain.TagMatchAny {
+		if queryPlan.tagMatch != domain.TagMatchAny {
 			arguments = append(arguments, len(options.NormalizedTags))
 			query += fmt.Sprintf(" HAVING COUNT(DISTINCT t.id) = $%d", len(arguments))
 		}
 		query += ")"
 	}
-	query += " ORDER BY d.created_at DESC, d.id DESC"
+	query += " ORDER BY " + queryPlan.orderBy
+	if queryPlan.limit > 0 {
+		arguments = append(arguments, queryPlan.limit)
+		query += fmt.Sprintf(" LIMIT $%d", len(arguments))
+	}
 
 	rows, err := s.executor.QueryContext(ctx, query, arguments...)
 	if err != nil {
@@ -166,6 +182,41 @@ func (s *Store) ListDocuments(
 		return nil, fmt.Errorf("iterate documents: %w", err)
 	}
 	return documents, nil
+}
+
+// PurgeDocument permanently removes a deleted catalog row and its cascading
+// document-tag join rows.
+func (s *Store) PurgeDocument(ctx context.Context, id domain.DocumentID) error {
+	result, err := s.executor.ExecContext(
+		ctx,
+		"DELETE FROM documents WHERE id = $1 AND status = 'deleted'",
+		id,
+	)
+	if err != nil {
+		return fmt.Errorf("purge document %q: %w", id, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("inspect document purge %q: %w", id, err)
+	}
+	if rowsAffected > 0 {
+		return nil
+	}
+
+	var status domain.DocumentStatus
+	err = s.executor.QueryRowContext(
+		ctx,
+		"SELECT status FROM documents WHERE id = $1",
+		id,
+	).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect document purge target %q: %w", id, err)
+	}
+	return fmt.Errorf("purge document %q: %w", id, domain.ErrConflict)
 }
 
 // ClaimUpload atomically binds an idempotency digest to one document ID.
@@ -244,4 +295,106 @@ func scanDocument(row rowScanner) (domain.Document, error) {
 		document.PurgeAfter = &purgeAfter.Time
 	}
 	return document, nil
+}
+
+type documentListQuery struct {
+	statusClause   string
+	tagMatch       domain.TagMatch
+	orderBy        string
+	purgeDueBefore *time.Time
+	limit          int
+}
+
+func buildDocumentListQuery(
+	options domain.DocumentListOptions,
+) (documentListQuery, error) {
+	if options.Limit < 0 {
+		return documentListQuery{}, fmt.Errorf("list documents: limit must be non-negative")
+	}
+
+	tagMatch := options.TagMatch
+	if tagMatch == "" {
+		tagMatch = domain.TagMatchAll
+	}
+	if tagMatch != domain.TagMatchAll && tagMatch != domain.TagMatchAny {
+		return documentListQuery{}, fmt.Errorf(
+			"list documents: invalid tag match %q",
+			options.TagMatch,
+		)
+	}
+
+	statusClause, includesDeleted, err := buildDocumentStatusClause(options.Statuses)
+	if err != nil {
+		return documentListQuery{}, err
+	}
+
+	orderBy := "d.created_at DESC, d.id DESC"
+	if options.PurgeDueBefore != nil {
+		if !includesDeleted {
+			return documentListQuery{}, fmt.Errorf(
+				"list documents: purge due filter requires deleted status",
+			)
+		}
+		orderBy = "d.purge_after ASC, d.id ASC"
+	}
+
+	return documentListQuery{
+		statusClause:   statusClause,
+		tagMatch:       tagMatch,
+		orderBy:        orderBy,
+		purgeDueBefore: options.PurgeDueBefore,
+		limit:          options.Limit,
+	}, nil
+}
+
+func buildDocumentStatusClause(statuses []domain.DocumentStatus) (
+	string,
+	bool,
+	error,
+) {
+	if statuses == nil {
+		return "d.status = 'ready'", false, nil
+	}
+	if len(statuses) == 0 {
+		return "FALSE", false, nil
+	}
+
+	clauses := make([]string, 0, len(statuses))
+	seen := make(map[domain.DocumentStatus]struct{}, len(statuses))
+	includesDeleted := false
+	for _, status := range statuses {
+		if _, ok := seen[status]; ok {
+			continue
+		}
+		seen[status] = struct{}{}
+
+		clause, err := documentStatusClause(status)
+		if err != nil {
+			return "", false, err
+		}
+		if status == domain.DocumentStatusDeleted {
+			includesDeleted = true
+		}
+		clauses = append(clauses, clause)
+	}
+
+	if len(clauses) == 1 {
+		return clauses[0], includesDeleted, nil
+	}
+	return "(" + strings.Join(clauses, " OR ") + ")", includesDeleted, nil
+}
+
+func documentStatusClause(status domain.DocumentStatus) (string, error) {
+	switch status {
+	case domain.DocumentStatusUploading:
+		return "d.status = 'uploading'", nil
+	case domain.DocumentStatusReady:
+		return "d.status = 'ready'", nil
+	case domain.DocumentStatusFailed:
+		return "d.status = 'failed'", nil
+	case domain.DocumentStatusDeleted:
+		return "d.status = 'deleted'", nil
+	default:
+		return "", fmt.Errorf("list documents: invalid status %q", status)
+	}
 }

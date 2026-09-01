@@ -99,6 +99,20 @@ type DocumentListOptions struct {
 	NormalizedTags []string
 	// TagMatch selects all-tag or any-tag matching.
 	TagMatch TagMatch
+	// Statuses limits the list to the supplied lifecycle states.
+	//
+	// A nil slice preserves the legacy ready-only default. An empty non-nil
+	// slice matches no documents.
+	Statuses []DocumentStatus
+	// PurgeDueBefore limits results to deleted documents whose purge time is
+	// due at or before the supplied instant.
+	//
+	// Callers must also include DocumentStatusDeleted in Statuses.
+	PurgeDueBefore *time.Time
+	// Limit bounds the number of returned documents.
+	//
+	// Zero preserves the legacy unbounded behavior.
+	Limit int
 }
 
 // TransitionTo applies an allowed lifecycle transition at now.

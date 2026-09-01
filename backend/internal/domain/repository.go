@@ -7,8 +7,13 @@ import (
 )
 
 var (
-	ErrNotFound      = errors.New("not found")
-	ErrConflict      = errors.New("version conflict")
+	// ErrNotFound indicates that the requested domain record does not exist.
+	ErrNotFound = errors.New("not found")
+	// ErrConflict indicates that the requested mutation conflicts with the
+	// current stored state.
+	ErrConflict = errors.New("version conflict")
+	// ErrAlreadyExists indicates that a create operation duplicated a unique
+	// domain record.
 	ErrAlreadyExists = errors.New("already exists")
 )
 
@@ -22,8 +27,15 @@ type Repository interface {
 	GetDocument(ctx context.Context, id DocumentID) (Document, error)
 	// UpdateDocument applies metadata changes only when expectedVersion matches.
 	UpdateDocument(ctx context.Context, document Document, expectedVersion int64) (Document, error)
-	// ListDocuments returns ready documents matching optional tag constraints.
+	// ListDocuments returns documents matching the supplied listing options.
+	//
+	// A nil options.Statuses slice preserves the legacy ready-only default.
 	ListDocuments(ctx context.Context, options DocumentListOptions) ([]Document, error)
+	// PurgeDocument permanently removes a soft-deleted catalog document.
+	//
+	// Implementations must return ErrConflict when the document exists but is
+	// not currently deleted. Missing documents are treated as already purged.
+	PurgeDocument(ctx context.Context, id DocumentID) error
 	// ClaimUpload binds an uploader's idempotency digest to one document ID.
 	// It returns the prior document ID and false when the digest already exists.
 	ClaimUpload(

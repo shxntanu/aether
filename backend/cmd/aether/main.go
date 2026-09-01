@@ -25,27 +25,29 @@ import (
 )
 
 func main() {
+	logger := log.New(os.Stderr, "aether ", log.LstdFlags|log.LUTC)
 	settings, err := config.Load()
 	if err != nil {
-		log.Fatalf("load configuration: %v", err)
+		logger.Fatalf("load configuration: %v", err)
 	}
 
 	listener, err := net.Listen("tcp", settings.HTTPAddress)
 	if err != nil {
-		log.Fatalf("listen on %s: %v", settings.HTTPAddress, err)
+		logger.Fatalf("listen on %s: %v", settings.HTTPAddress, err)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	var auditRecorder audit.Recorder
 	router := httpapi.NewRouter()
 	if settings.GoogleClientID != "" {
 		store, err := postgres.Open(ctx, settings.DatabaseURL)
 		if err != nil {
-			log.Fatalf("open catalog: %v", err)
+			logger.Fatalf("open catalog: %v", err)
 		}
 		defer func() { _ = store.Close() }()
-		auditRecorder := audit.NewRecorder(
+		auditRecorder = audit.NewRecorder(
 			store,
 			time.Now,
 			func() (string, error) { return newSecret(), nil },
@@ -57,16 +59,20 @@ func main() {
 			settings.GoogleRedirectURL,
 		)
 		if err != nil {
-			log.Fatalf("configure Google OIDC: %v", err)
+			logger.Fatalf("configure Google OIDC: %v", err)
 		}
 		identityService := identity.NewService(store, time.Now, newSecret, auditRecorder)
 		if _, err := identityService.BootstrapAdmin(ctx, settings.BootstrapAdminEmail); err != nil {
-			log.Fatalf("bootstrap administrator: %v", err)
+			logger.Fatalf("bootstrap administrator: %v", err)
 		}
 		oidcService := identity.NewOIDCService(store, provider, time.Now, newSecret)
 		objects, err := configureObjectStore(ctx, settings)
 		if err != nil {
-			log.Fatalf("configure %s object storage: %v", settings.StorageProvider, err)
+			logger.Fatalf(
+				"configure %s object storage: %v",
+				settings.StorageProvider,
+				err,
+			)
 		}
 		vaultService := vault.NewService(store, objects, auditRecorder)
 		router = httpapi.NewRouter(httpapi.Options{
@@ -76,10 +82,22 @@ func main() {
 			SecureCookies: settings.SecureCookies,
 			Audit:         auditRecorder,
 		})
+		go vault.RunPurgeLoop(ctx, vaultService, time.Hour, 100, logger)
 	}
-	log.Printf("Aether API listening on %s", listener.Addr())
+	router = httpapi.Secure(router, httpapi.SecurityOptions{
+		PublicURL:          settings.PublicURL,
+		TrustedProxyRanges: settings.TrustedProxyRanges,
+		LoginLimiter:       httpapi.NewLimiter(10, 10*time.Minute, time.Now),
+		AccountLimiter:     httpapi.NewLimiter(120, time.Minute, time.Now),
+		IPLimiter:          httpapi.NewLimiter(60, time.Minute, time.Now),
+		RequestTimeout:     settings.RequestTimeout,
+		UploadTimeout:      settings.UploadTimeout,
+		Logger:             logger,
+		Audit:              auditRecorder,
+	})
+	logger.Printf("Aether API listening on %s", listener.Addr())
 	if err := server.Serve(ctx, listener, router, settings.ShutdownTimeout); err != nil {
-		log.Fatalf("serve HTTP: %v", err)
+		logger.Fatalf("serve HTTP: %v", err)
 	}
 }
 

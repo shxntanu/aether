@@ -176,7 +176,11 @@ func registerOIDCRoutes(mux *http.ServeMux, opts Options) {
 	})
 	mux.HandleFunc("GET /auth/google/callback", func(w http.ResponseWriter, r *http.Request) {
 		setNoStore(w)
-		claims, err := opts.OIDC.Complete(r.Context(), r.URL.Query().Get("state"), r.URL.Query().Get("code"))
+		claims, err := opts.OIDC.Complete(
+			r.Context(),
+			r.URL.Query().Get("state"),
+			r.URL.Query().Get("code"),
+		)
 		if err != nil {
 			recordAuthorizationReject(opts, r.Context(), "login")
 			writeError(w, http.StatusUnauthorized, "invalid_login")
@@ -185,7 +189,9 @@ func registerOIDCRoutes(mux *http.ServeMux, opts Options) {
 		token, csrfToken, err := completeLogin(opts.Identity, r.Context(), claims)
 		if err != nil {
 			status := http.StatusInternalServerError
-			if errors.Is(err, identity.ErrNotAllowlisted) || errors.Is(err, identity.ErrMemberDisabled) || errors.Is(err, identity.ErrEmailUnverified) {
+			if errors.Is(err, identity.ErrNotAllowlisted) ||
+				errors.Is(err, identity.ErrMemberDisabled) ||
+				errors.Is(err, identity.ErrEmailUnverified) {
 				status = http.StatusForbidden
 			}
 			recordAuthorizationReject(opts, r.Context(), "login")
@@ -340,6 +346,20 @@ func requireMember(
 				writeError(w, http.StatusUnauthorized, "authentication_required")
 			}
 			return
+		}
+		if limiter := accountLimiterFromContext(r.Context()); limiter != nil {
+			allowed, retryAfter := limiter.Allow(string(member.ID))
+			if !allowed {
+				logRateLimitRejection(requestLoggerFromContext(r.Context()), "member", r)
+				recordAuthorizationRejectWithRecorder(
+					recorder,
+					r.Context(),
+					"rate_limit:member",
+					memberIDPointer(member.ID),
+				)
+				writeRateLimitResponse(w, retryAfter)
+				return
+			}
 		}
 		requestContext := context.WithValue(r.Context(), memberContextKey{}, member)
 		if csrfCookie, csrfErr := r.Cookie(CSRFCookieName); csrfErr == nil {
@@ -603,7 +623,11 @@ func recordAuthorizationRejectWithRecorder(
 		ObjectID:   objectID,
 		Outcome:    domain.AuditOutcomeRejected,
 	}); err != nil {
-		logAuditFailure(log.Default(), objectID, err)
+		logger := requestLoggerFromContext(ctx)
+		if logger == nil {
+			logger = log.Default()
+		}
+		logAuditFailure(logger, objectID, err)
 	}
 }
 

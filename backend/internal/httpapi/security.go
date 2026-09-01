@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"log"
@@ -11,7 +12,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"github.com/shxntanu/aether/backend/internal/audit"
 )
 
 const (
@@ -30,7 +34,7 @@ type SecurityOptions struct {
 	TrustedProxyRanges []*net.IPNet
 	// LoginLimiter throttles browser login start and callback requests.
 	LoginLimiter *Limiter
-	// AccountLimiter is reserved for later authenticated account throttling.
+	// AccountLimiter throttles requests after authentication by member ID.
 	AccountLimiter *Limiter
 	// IPLimiter throttles requests by resolved client address.
 	IPLimiter *Limiter
@@ -40,10 +44,16 @@ type SecurityOptions struct {
 	UploadTimeout time.Duration
 	// Logger records limiter rejections without logging raw client addresses.
 	Logger *log.Logger
+	// Audit records rate-limit authorization rejections without request data.
+	Audit audit.Recorder
 }
 
-// Secure applies response hardening, safe client-IP rate limiting, and request
-// deadlines around handler.
+// Secure composes the process-wide HTTP boundary around handler.
+//
+// Requests pass through panic recovery, security headers, request IDs,
+// deadlines, client-IP/login limits, and finally the supplied route handler in
+// that order. Authenticated member limits are applied by route middleware
+// after the member has been resolved.
 func Secure(handler http.Handler, options SecurityOptions) http.Handler {
 	if handler == nil {
 		handler = http.NotFoundHandler()
@@ -58,15 +68,97 @@ func Secure(handler http.Handler, options SecurityOptions) http.Handler {
 		uploadTimeout = defaultUploadTimeout
 	}
 
+	secured := withRateLimits(
+		handler,
+		options,
+	)
+	secured = withDeadline(secured, requestTimeout, uploadTimeout)
+	secured = withRequestID(secured)
+	secured = withSecurityHeaders(secured)
+	secured = withPanicRecovery(secured, options.Logger)
+	return secured
+}
+
+type requestIDContextKey struct{}
+type accountLimiterContextKey struct{}
+type requestLoggerContextKey struct{}
+
+var requestIDCounter atomic.Uint64
+
+func withPanicRecovery(next http.Handler, logger *log.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := newRequestID()
+		ctx := context.WithValue(r.Context(), requestIDContextKey{}, requestID)
+		if logger != nil {
+			ctx = context.WithValue(ctx, requestLoggerContextKey{}, logger)
+		}
+		r = r.WithContext(ctx)
+		w.Header().Set("X-Request-ID", requestID)
+		defer func() {
+			if recover() != nil {
+				if logger != nil {
+					logger.Printf(
+						"panic recovered request_id=%s method=%s path=%s",
+						requestID,
+						r.Method,
+						r.URL.Path,
+					)
+				}
+				writeError(w, http.StatusInternalServerError, "internal_error")
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+func withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		setSecurityHeaders(w.Header())
+		next.ServeHTTP(w, r)
+	})
+}
 
+func withRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID, ok := r.Context().Value(requestIDContextKey{}).(string)
+		if !ok || requestID == "" {
+			requestID = newRequestID()
+			r = r.WithContext(
+				context.WithValue(r.Context(), requestIDContextKey{}, requestID),
+			)
+		}
+		w.Header().Set("X-Request-ID", requestID)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func withDeadline(
+	next http.Handler,
+	requestTimeout time.Duration,
+	uploadTimeout time.Duration,
+) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		timeout := requestTimeoutFor(r, requestTimeout, uploadTimeout)
+		ctx, cancel := context.WithTimeout(r.Context(), timeout)
+		defer cancel()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func withRateLimits(next http.Handler, options SecurityOptions) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if denied, retryAfter := rateLimitRequest(
 			r,
 			options.TrustedProxyRanges,
 			options.IPLimiter,
 		); denied {
 			logRateLimitRejection(options.Logger, "ip", r)
+			recordAuthorizationRejectWithRecorder(
+				options.Audit,
+				r.Context(),
+				"rate_limit:ip",
+				nil,
+			)
 			writeRateLimitResponse(w, retryAfter)
 			return
 		}
@@ -77,16 +169,48 @@ func Secure(handler http.Handler, options SecurityOptions) http.Handler {
 				options.LoginLimiter,
 			); denied {
 				logRateLimitRejection(options.Logger, "login", r)
+				recordAuthorizationRejectWithRecorder(
+					options.Audit,
+					r.Context(),
+					"rate_limit:login",
+					nil,
+				)
 				writeRateLimitResponse(w, retryAfter)
 				return
 			}
 		}
+		if unsafeAPIRequest(r) && !sameSiteRequest(r, options.PublicURL) {
+			recordAuthorizationRejectWithRecorder(
+				options.Audit,
+				r.Context(),
+				"csrf:origin",
+				nil,
+			)
+			writeError(w, http.StatusForbidden, "csrf_required")
+			return
+		}
 
-		timeout := requestTimeoutFor(r, requestTimeout, uploadTimeout)
-		ctx, cancel := context.WithTimeout(r.Context(), timeout)
-		defer cancel()
-		handler.ServeHTTP(w, r.WithContext(ctx))
+		ctx := context.WithValue(r.Context(), accountLimiterContextKey{}, options.AccountLimiter)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func newRequestID() string {
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err == nil {
+		return hex.EncodeToString(random[:])
+	}
+	return "fallback-" + strconv.FormatUint(requestIDCounter.Add(1), 10)
+}
+
+func accountLimiterFromContext(ctx context.Context) *Limiter {
+	limiter, _ := ctx.Value(accountLimiterContextKey{}).(*Limiter)
+	return limiter
+}
+
+func requestLoggerFromContext(ctx context.Context) *log.Logger {
+	logger, _ := ctx.Value(requestLoggerContextKey{}).(*log.Logger)
+	return logger
 }
 
 func setSecurityHeaders(header http.Header) {
@@ -204,7 +328,55 @@ func writeRateLimitResponse(w http.ResponseWriter, retryAfter time.Duration) {
 		}
 		w.Header().Set("Retry-After", strconv.Itoa(seconds))
 	}
-	http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+	writeError(w, http.StatusTooManyRequests, "rate_limited")
+}
+
+func sameSiteRequest(r *http.Request, publicURL *url.URL) bool {
+	if strings.EqualFold(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")), "cross-site") {
+		return false
+	}
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	if publicURL == nil {
+		return false
+	}
+	requestOrigin, ok := normalizeOrigin(origin)
+	if !ok {
+		return false
+	}
+	publicOrigin, ok := normalizeOrigin(publicURL.String())
+	return ok && requestOrigin == publicOrigin
+}
+
+func normalizeOrigin(raw string) (string, bool) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" ||
+		parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
+		(parsed.Path != "" && parsed.Path != "/") {
+		return "", false
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "" {
+		return "", false
+	}
+	port := parsed.Port()
+	if (scheme == "http" && port == "80") ||
+		(scheme == "https" && port == "443") {
+		port = ""
+	}
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	if port != "" {
+		host += ":" + port
+	}
+	return scheme + "://" + host, true
 }
 
 func logRateLimitRejection(logger *log.Logger, scope string, r *http.Request) {

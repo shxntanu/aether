@@ -256,7 +256,15 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 
 func (s *Store) resumableUpload(ctx context.Context, metadata driveFile,
 	body io.Reader, contentType string) (storage.ObjectInfo, error) {
-	encoded, err := json.Marshal(metadata)
+	uploadMetadata := driveUploadMetadata{
+		Name:          metadata.Name,
+		MimeType:      metadata.MimeType,
+		AppProperties: metadata.AppProperties,
+	}
+	if metadata.ID == "" {
+		uploadMetadata.Parents = metadata.Parents
+	}
+	encoded, err := json.Marshal(uploadMetadata)
 	if err != nil {
 		return storage.ObjectInfo{}, fmt.Errorf("encode Drive metadata: %w", err)
 	}
@@ -342,14 +350,15 @@ func (s *Store) sendChunk(ctx context.Context, sessionURL string, chunk []byte,
 			response.StatusCode == http.StatusPermanentRedirect) {
 			return response, nil
 		}
-		if response != nil {
-			_ = response.Body.Close()
+		if err == nil && response.StatusCode != http.StatusTooManyRequests &&
+			response.StatusCode < 500 {
+			return nil, s.responseError("send Drive upload chunk", response)
 		}
 		if err != nil && !isTemporaryNetworkError(err) {
 			return nil, fmt.Errorf("send Drive upload chunk: %w", err)
 		}
-		if err == nil && response.StatusCode != http.StatusTooManyRequests && response.StatusCode < 500 {
-			return nil, s.responseError("send Drive upload chunk", response)
+		if response != nil {
+			_ = response.Body.Close()
 		}
 		if err := waitRetry(ctx, attempt); err != nil {
 			return nil, err
@@ -435,12 +444,20 @@ type driveFile struct {
 	AppProperties map[string]string `json:"appProperties,omitempty"`
 }
 
+type driveUploadMetadata struct {
+	Name          string            `json:"name"`
+	MimeType      string            `json:"mimeType"`
+	Parents       []string          `json:"parents,omitempty"`
+	AppProperties map[string]string `json:"appProperties,omitempty"`
+}
+
 func (f driveFile) objectInfo(key string) storage.ObjectInfo {
 	return storage.ObjectInfo{Key: key, Size: f.Size, ContentType: f.MimeType,
 		LastModified: f.ModifiedTime}
 }
 
 func (s *Store) responseError(operation string, response *http.Response) error {
+	defer response.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 	return fmt.Errorf("%s: Drive returned HTTP %d: %s", operation, response.StatusCode,
 		strings.TrimSpace(string(body)))

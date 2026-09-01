@@ -124,7 +124,7 @@ func handleDocumentDelete(w http.ResponseWriter, r *http.Request, service VaultS
 		err = service.Delete(r.Context(), documentID)
 	}
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -144,7 +144,7 @@ func handleDocumentRestore(w http.ResponseWriter, r *http.Request, service Vault
 		record, err = service.Restore(r.Context(), documentID)
 	}
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	writeRecord(w, http.StatusOK, record)
@@ -164,7 +164,7 @@ func handleDocumentPurge(w http.ResponseWriter, r *http.Request, service VaultSe
 		err = service.Purge(r.Context(), documentID, vault.EnforceRetention)
 	}
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -204,7 +204,7 @@ func handleDocumentUpload(w http.ResponseWriter, r *http.Request, service VaultS
 		IdempotencyKey: idempotencyKey,
 	})
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	writeRecord(w, http.StatusCreated, record)
@@ -217,7 +217,7 @@ func handleDocumentList(w http.ResponseWriter, r *http.Request, service VaultSer
 		domain.TagMatch(r.URL.Query().Get("match")),
 	)
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"documents": records})
@@ -226,7 +226,7 @@ func handleDocumentList(w http.ResponseWriter, r *http.Request, service VaultSer
 func handleDocumentGet(w http.ResponseWriter, r *http.Request, service VaultService) {
 	record, err := service.Get(r.Context(), domain.DocumentID(r.PathValue("id")))
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	writeRecord(w, http.StatusOK, record)
@@ -253,7 +253,7 @@ func handleDocumentPatch(w http.ResponseWriter, r *http.Request, service VaultSe
 		},
 	)
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	writeRecord(w, http.StatusOK, record)
@@ -278,7 +278,7 @@ func handleDocumentContent(w http.ResponseWriter, r *http.Request, service Vault
 		content, err = service.OpenContent(r.Context(), documentID, byteRange)
 	}
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	defer content.Body.Close()
@@ -325,7 +325,7 @@ func handleTagList(w http.ResponseWriter, r *http.Request, service VaultService)
 	}
 	tags, err := service.ListTags(r.Context(), r.URL.Query().Get("q"), limit)
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
@@ -341,7 +341,7 @@ func handleTagCreate(w http.ResponseWriter, r *http.Request, service VaultServic
 	}
 	tag, err := service.CreateTag(r.Context(), input.Name)
 	if err != nil {
-		writeVaultError(w, err)
+		writeVaultError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, tag)
@@ -352,27 +352,38 @@ func writeRecord(w http.ResponseWriter, status int, record vault.DocumentRecord)
 	writeJSON(w, status, record)
 }
 
-func writeVaultError(w http.ResponseWriter, err error) {
+func writeVaultError(w http.ResponseWriter, r *http.Request, err error) {
+	status := http.StatusInternalServerError
+	code := "vault_error"
 	switch {
 	case errors.Is(err, domain.ErrNotFound), errors.Is(err, storage.ErrNotFound):
-		writeError(w, http.StatusNotFound, "not_found")
+		status, code = http.StatusNotFound, "not_found"
 	case errors.Is(err, domain.ErrConflict):
-		writeError(w, http.StatusPreconditionFailed, "version_conflict")
+		status, code = http.StatusPreconditionFailed, "version_conflict"
 	case errors.Is(err, vault.ErrDocumentTooLarge):
-		writeError(w, http.StatusRequestEntityTooLarge, "document_too_large")
+		status, code = http.StatusRequestEntityTooLarge, "document_too_large"
 	case errors.Is(err, vault.ErrUnsupportedMediaType):
-		writeError(w, http.StatusUnsupportedMediaType, "unsupported_media_type")
+		status, code = http.StatusUnsupportedMediaType, "unsupported_media_type"
 	case errors.Is(err, vault.ErrInvalidMetadata):
-		writeError(w, http.StatusBadRequest, "invalid_request")
+		status, code = http.StatusBadRequest, "invalid_request"
 	case errors.Is(err, vault.ErrInvalidRange):
-		writeError(w, http.StatusRequestedRangeNotSatisfiable, "invalid_range")
+		status, code = http.StatusRequestedRangeNotSatisfiable, "invalid_range"
 	case errors.Is(err, vault.ErrUploadInProgress):
-		writeError(w, http.StatusConflict, "upload_in_progress")
+		status, code = http.StatusConflict, "upload_in_progress"
 	case errors.Is(err, vault.ErrRetentionActive):
-		writeError(w, http.StatusConflict, "retention_active")
-	default:
-		writeError(w, http.StatusInternalServerError, "vault_error")
+		status, code = http.StatusConflict, "retention_active"
 	}
+	if status >= http.StatusInternalServerError {
+		if logger := requestLoggerFromContext(r.Context()); logger != nil {
+			logger.Printf(
+				"vault request failed method=%s path=%s error=%v",
+				r.Method,
+				r.URL.Path,
+				err,
+			)
+		}
+	}
+	writeError(w, status, code)
 }
 
 func sanitizedFilename(filename string) string {

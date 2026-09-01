@@ -52,7 +52,7 @@ func (s *Store) ListTags(ctx context.Context, query string, limit int) ([]domain
 	rows, err := s.executor.QueryContext(ctx, `
 		SELECT id, display_name, normalized_name
 		FROM tags
-		WHERE normalized_name LIKE $1 ESCAPE '\\'
+		WHERE normalized_name LIKE $1 ESCAPE '\'
 		ORDER BY normalized_name, id
 		LIMIT $2`, "%"+escapeLike(strings.ToLower(strings.TrimSpace(query)))+"%", limit)
 	if err != nil {

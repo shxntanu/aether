@@ -95,6 +95,27 @@ func Run(t *testing.T, factory Factory) {
 		if got != tag {
 			t.Fatalf("GetTagByNormalizedName() = %#v, want %#v", got, tag)
 		}
+		matching, err := repository.ListTags(ctx, "utility", 20)
+		if err != nil {
+			t.Fatalf("ListTags() error = %v", err)
+		}
+		if len(matching) != 1 || matching[0] != tag {
+			t.Fatalf("ListTags() = %#v, want [%#v]", matching, tag)
+		}
+		wildcard, err := domain.NewTag("tag-wildcard", "100% complete")
+		if err != nil {
+			t.Fatalf("NewTag() error = %v", err)
+		}
+		if err := repository.CreateTag(ctx, wildcard); err != nil {
+			t.Fatalf("CreateTag() wildcard error = %v", err)
+		}
+		matching, err = repository.ListTags(ctx, "100%", 20)
+		if err != nil {
+			t.Fatalf("ListTags() wildcard error = %v", err)
+		}
+		if len(matching) != 1 || matching[0] != wildcard {
+			t.Fatalf("ListTags() wildcard = %#v, want [%#v]", matching, wildcard)
+		}
 
 		tags, err := repository.ListDocumentTags(ctx, document.ID)
 		if err != nil {

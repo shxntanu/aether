@@ -261,7 +261,11 @@ function App() {
               initial={{ opacity: 0, scale: 0.35 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.8 }}
-              transition={{ type: "spring", stiffness: 120, damping: 18 }}
+              transition={
+                reducedMotion
+                  ? { duration: 0 }
+                  : { type: "spring", stiffness: 120, damping: 18 }
+              }
               style={{ transformOrigin: `${selectedPoint.x * 10}px ${selectedPoint.y * 7.2}px` }}
             >
               <circle cx={selectedPoint.x * 10} cy={selectedPoint.y * 7.2} r="34" />
@@ -286,7 +290,11 @@ function App() {
                 initial={{ opacity: 0, pathLength: 0 }}
                 animate={{ opacity: [0, 1, 0.72, 0], pathLength: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 3.1, times: [0, 0.12, 0.62, 1] }}
+                transition={
+                  reducedMotion
+                    ? { duration: 0 }
+                    : { duration: 3.1, times: [0, 0.12, 0.62, 1] }
+                }
               />
             );
           })}

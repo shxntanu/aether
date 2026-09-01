@@ -8,6 +8,10 @@ import (
 	"github.com/shxntanu/aether/backend/internal/domain"
 )
 
+// AppendAuditEvent adds one immutable event to the audit log.
+//
+// The store exposes no audit update or delete operation, preserving append-only
+// semantics for the security history.
 func (s *Store) AppendAuditEvent(ctx context.Context, event domain.AuditEvent) error {
 	_, err := s.executor.ExecContext(ctx, `
 		INSERT INTO audit_events (id, actor_id, action, object_type, object_id, outcome, occurred_at)
@@ -23,6 +27,9 @@ func (s *Store) AppendAuditEvent(ctx context.Context, event domain.AuditEvent) e
 	return translateError("append audit event", err)
 }
 
+// ListAuditEvents returns audit events for one object in chronological order.
+//
+// This read path does not provide mutation access to the append-only audit log.
 func (s *Store) ListAuditEvents(ctx context.Context, objectType, objectID string) ([]domain.AuditEvent, error) {
 	rows, err := s.executor.QueryContext(ctx, `
 		SELECT id, actor_id, action, object_type, object_id, outcome, occurred_at

@@ -146,9 +146,9 @@ Acceptance: an allowlisted user can upload an optionally tagged document, retrie
 
 ### 5. Google Drive Storage
 
-- [ ] Create a separate vault-owner OAuth authorization flow using only the `drive.file` scope.
-- [ ] Store the refresh token as a deployment secret, never in browser storage or logs.
-- [ ] Implement the Drive adapter with resumable uploads, range downloads, metadata lookup, trash, restore, and permanent deletion.
+- [x] Create a separate vault-owner OAuth authorization flow using only the `drive.file` scope.
+- [x] Store the refresh token as a deployment secret, never in browser storage or logs.
+- [x] Implement the Drive adapter with resumable uploads, range downloads, metadata lookup, trash, restore, and permanent deletion.
 - [ ] Run the shared object-store contract suite against a fake Drive server.
 - [ ] Provide an opt-in integration test and setup guide for a real app-managed Drive folder.
 - [ ] Re-run the tagged-vault acceptance flow with Drive selected through configuration only.
@@ -157,9 +157,9 @@ Acceptance: switching from local storage to Drive requires configuration changes
 
 ### 6. Deletion, Audit, and Public Hardening
 
-- [ ] Add 30-day soft deletion, administrator restore, and eventual purge.
-- [ ] Audit uploads, edits, downloads, deletion, restoration, membership changes, and rejected authorization without recording document text or query text.
-- [ ] Add CSRF protection, account/IP rate limits, request timeouts, `nosniff`, restrictive content policies, and safe content disposition.
+- [x] Add 30-day soft deletion, administrator restore, and eventual purge.
+- [x] Audit uploads, edits, downloads, deletion, restoration, membership changes, and rejected authorization without recording document text or query text.
+- [x] Add CSRF protection, account/IP rate limits, request timeouts, `nosniff`, restrictive content policies, and safe content disposition.
 - [ ] Add a public landing page that never exposes family data.
 - [ ] Test interrupted uploads, duplicate idempotency keys, stale edits, failed manifest writes, and deletion recovery.
 

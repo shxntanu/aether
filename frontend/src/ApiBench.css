@@ -1,4 +1,4 @@
-:root {
+.workbench {
   --ink: #071522;
   --ink-raised: #0c1d2b;
   --ink-soft: #112838;
@@ -10,13 +10,17 @@
   --graphite-bright: #476073;
   --danger: #ff8d7b;
   --success: #c7ff3d;
-}
-
-.workbench {
   background: var(--ink);
   color: var(--chalk);
+  font-family: "Avenir Next Condensed", "DIN Condensed", sans-serif;
+  font-synthesis: none;
   min-height: 100svh;
+  text-rendering: optimizeLegibility;
 }
+
+.workbench ::selection { background: var(--lime); color: var(--ink); }
+
+@scope (.workbench) {
 
 .topbar {
   align-items: center;
@@ -353,4 +357,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
+
 }

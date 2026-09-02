@@ -1,9 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  background: #071522;
-  color: #f1f0e7;
-  font-family: "Avenir Next Condensed", "DIN Condensed", sans-serif;
+  background: #f5f6f2;
+  color: #14222c;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -12,4 +11,3 @@
 html, body, #root { margin: 0; min-height: 100%; min-width: 320px; }
 body { min-height: 100vh; overflow-x: hidden; }
 button, input { font: inherit; }
-::selection { background: #c7ff3d; color: #071522; }

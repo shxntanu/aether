@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/shxntanu/aether/backend/internal/domain"
@@ -13,57 +12,58 @@ import (
 // The store exposes no audit update or delete operation, preserving append-only
 // semantics for the security history.
 func (s *Store) AppendAuditEvent(ctx context.Context, event domain.AuditEvent) error {
-	_, err := s.executor.ExecContext(ctx, `
-		INSERT INTO audit_events (id, actor_id, action, object_type, object_id, outcome, occurred_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		event.ID,
-		event.ActorID,
-		event.Action,
-		event.ObjectType,
-		event.ObjectID,
-		event.Outcome,
-		event.OccurredAt,
-	)
+	var actorID *string
+	if event.ActorID != nil {
+		value := string(*event.ActorID)
+		actorID = &value
+	}
+	model := auditEventModel{
+		ID:         string(event.ID),
+		ActorID:    actorID,
+		Action:     event.Action,
+		ObjectType: event.ObjectType,
+		ObjectID:   event.ObjectID,
+		Outcome:    event.Outcome,
+		OccurredAt: event.OccurredAt,
+	}
+	err := s.orm.WithContext(ctx).Create(&model).Error
 	return translateError("append audit event", err)
 }
 
 // ListAuditEvents returns audit events for one object in chronological order.
 //
 // This read path does not provide mutation access to the append-only audit log.
-func (s *Store) ListAuditEvents(ctx context.Context, objectType, objectID string) ([]domain.AuditEvent, error) {
-	rows, err := s.executor.QueryContext(ctx, `
-		SELECT id, actor_id, action, object_type, object_id, outcome, occurred_at
-		FROM audit_events
-		WHERE object_type = $1 AND object_id = $2
-		ORDER BY occurred_at, id`, objectType, objectID)
+func (s *Store) ListAuditEvents(
+	ctx context.Context,
+	objectType string,
+	objectID string,
+) ([]domain.AuditEvent, error) {
+	var models []auditEventModel
+	err := s.orm.WithContext(ctx).
+		Where("object_type = ? AND object_id = ?", objectType, objectID).
+		Order("occurred_at").
+		Order("id").
+		Find(&models).Error
 	if err != nil {
 		return nil, fmt.Errorf("list audit events: %w", err)
 	}
-	defer rows.Close()
 
-	events := make([]domain.AuditEvent, 0)
-	for rows.Next() {
-		var event domain.AuditEvent
-		var actorID sql.NullString
-		if err := rows.Scan(
-			&event.ID,
-			&actorID,
-			&event.Action,
-			&event.ObjectType,
-			&event.ObjectID,
-			&event.Outcome,
-			&event.OccurredAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan audit event: %w", err)
+	events := make([]domain.AuditEvent, 0, len(models))
+	for _, model := range models {
+		var actorID *domain.MemberID
+		if model.ActorID != nil {
+			value := domain.MemberID(*model.ActorID)
+			actorID = &value
 		}
-		if actorID.Valid {
-			value := domain.MemberID(actorID.String)
-			event.ActorID = &value
-		}
-		events = append(events, event)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate audit events: %w", err)
+		events = append(events, domain.AuditEvent{
+			ID:         domain.AuditEventID(model.ID),
+			ActorID:    actorID,
+			Action:     model.Action,
+			ObjectType: model.ObjectType,
+			ObjectID:   model.ObjectID,
+			Outcome:    model.Outcome,
+			OccurredAt: model.OccurredAt,
+		})
 	}
 	return events, nil
 }

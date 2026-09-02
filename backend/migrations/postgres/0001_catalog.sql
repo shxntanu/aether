@@ -1,9 +1,9 @@
-CREATE TABLE IF NOT EXISTS schema_migrations (
+CREATE TABLE IF NOT EXISTS schema_migrations_tbl (
     version TEXT PRIMARY KEY,
     applied_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE members (
+CREATE TABLE members_tbl (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
     display_name TEXT NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE members (
     updated_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE documents (
+CREATE TABLE documents_tbl (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     original_filename TEXT NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE documents (
     storage_key TEXT NOT NULL UNIQUE,
     status TEXT NOT NULL CHECK (status IN ('uploading', 'ready', 'failed', 'deleted')),
     index_status TEXT NOT NULL CHECK (index_status IN ('not_scheduled', 'queued', 'extracting', 'enriching', 'indexed', 'failed')),
-    uploader_id TEXT NOT NULL REFERENCES members(id),
+    uploader_id TEXT NOT NULL REFERENCES members_tbl(id),
     version BIGINT NOT NULL CHECK (version > 0),
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
@@ -31,21 +31,21 @@ CREATE TABLE documents (
     purge_after TIMESTAMPTZ
 );
 
-CREATE TABLE tags (
+CREATE TABLE tags_tbl (
     id TEXT PRIMARY KEY,
     display_name TEXT NOT NULL,
     normalized_name TEXT NOT NULL UNIQUE
 );
 
-CREATE TABLE document_tags (
-    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+CREATE TABLE document_tags_tbl (
+    document_id TEXT NOT NULL REFERENCES documents_tbl(id) ON DELETE CASCADE,
+    tag_id TEXT NOT NULL REFERENCES tags_tbl(id) ON DELETE CASCADE,
     PRIMARY KEY (document_id, tag_id)
 );
 
-CREATE TABLE audit_events (
+CREATE TABLE audit_events_tbl (
     id TEXT PRIMARY KEY,
-    actor_id TEXT REFERENCES members(id),
+    actor_id TEXT REFERENCES members_tbl(id),
     action TEXT NOT NULL,
     object_type TEXT NOT NULL,
     object_id TEXT NOT NULL,
@@ -53,4 +53,4 @@ CREATE TABLE audit_events (
     occurred_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX audit_events_object_idx ON audit_events(object_type, object_id, occurred_at, id);
+CREATE INDEX audit_events_object_idx ON audit_events_tbl(object_type, object_id, occurred_at, id);

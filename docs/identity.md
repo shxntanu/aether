@@ -1,7 +1,7 @@
 # Identity and membership
 
 Aether uses Google OpenID Connect to identify users. Google authentication is
-not authorization: an account must also exist in Aether's `members` table and
+not authorization: an account must also exist in Aether's `members_tbl` table and
 have `active` status. Members with the `admin` role can manage that allowlist.
 
 ## Configuration

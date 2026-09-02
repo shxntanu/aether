@@ -102,7 +102,7 @@ records.
 
 Application rollback is safe because migration `0004` is additive: deploy an
 older application binary while preserving the database and storage volume.
-Do not drop the `sessions.csrf_hash` column or its index until all older and
+Do not drop the `sessions_tbl.csrf_hash` column or its index until all older and
 newer binaries have been retired. Old sessions are intentionally invalidated
 for unsafe requests and users must sign in again after the hardened binary is
 restored. The public route can also be withdrawn at the edge or by stopping

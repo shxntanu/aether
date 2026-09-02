@@ -46,172 +46,7 @@ type RouteName = "library" | "recent" | "tags" | "trash" | "members";
 type ViewMode = "list" | "grid";
 type TagMatch = "all" | "any";
 
-type FixtureDocument = DocumentRecord & { displayUploader: string };
-
-const fixtureDocuments: FixtureDocument[] = [
-  {
-    document: {
-      id: "fixture-tax-2025",
-      title: "Income tax return · FY 2024–25",
-      originalFilename: "ITR_V_2024-25_Aarav.pdf",
-      mediaType: "application/pdf",
-      sizeBytes: 2840000,
-      sha256: "fixture",
-      status: "ready",
-      indexStatus: "not_scheduled",
-      uploaderId: "mira",
-      version: 3,
-      createdAt: "2025-07-12T09:22:00Z",
-      updatedAt: "2025-07-12T09:22:00Z",
-    },
-    tags: [{ id: "tax", displayName: "Tax", normalizedName: "tax" }],
-    displayUploader: "Mira Shah",
-  },
-  {
-    document: {
-      id: "fixture-passport",
-      title: "Passport · Aarav Shah",
-      originalFilename: "passport_aarav_shah.jpg",
-      mediaType: "image/jpeg",
-      sizeBytes: 1240000,
-      sha256: "fixture",
-      status: "ready",
-      indexStatus: "not_scheduled",
-      uploaderId: "mira",
-      version: 1,
-      createdAt: "2025-06-28T15:40:00Z",
-      updatedAt: "2025-06-28T15:40:00Z",
-    },
-    tags: [
-      { id: "identity", displayName: "Identity", normalizedName: "identity" },
-    ],
-    displayUploader: "Mira Shah",
-  },
-  {
-    document: {
-      id: "fixture-rent",
-      title: "Lease agreement · 18 Palm Grove",
-      originalFilename: "lease_agreement_palm_grove.pdf",
-      mediaType: "application/pdf",
-      sizeBytes: 6940000,
-      sha256: "fixture",
-      status: "ready",
-      indexStatus: "not_scheduled",
-      uploaderId: "dev",
-      version: 2,
-      createdAt: "2025-06-19T11:10:00Z",
-      updatedAt: "2025-07-01T10:04:00Z",
-    },
-    tags: [
-      { id: "home", displayName: "Home", normalizedName: "home" },
-      { id: "legal", displayName: "Legal", normalizedName: "legal" },
-    ],
-    displayUploader: "Dev Shah",
-  },
-  {
-    document: {
-      id: "fixture-insurance",
-      title: "Health insurance policy",
-      originalFilename: "health_policy_2025.pdf",
-      mediaType: "application/pdf",
-      sizeBytes: 512000,
-      sha256: "fixture",
-      status: "ready",
-      indexStatus: "not_scheduled",
-      uploaderId: "mira",
-      version: 1,
-      createdAt: "2025-05-08T07:30:00Z",
-      updatedAt: "2025-05-08T07:30:00Z",
-    },
-    tags: [
-      {
-        id: "insurance",
-        displayName: "Insurance",
-        normalizedName: "insurance",
-      },
-    ],
-    displayUploader: "Mira Shah",
-  },
-  {
-    document: {
-      id: "fixture-property",
-      title: "Property tax receipt",
-      originalFilename: "property_tax_receipt_2025.png",
-      mediaType: "image/png",
-      sizeBytes: 932000,
-      sha256: "fixture",
-      status: "ready",
-      indexStatus: "not_scheduled",
-      uploaderId: "dev",
-      version: 1,
-      createdAt: "2025-04-23T13:18:00Z",
-      updatedAt: "2025-04-23T13:18:00Z",
-    },
-    tags: [{ id: "home", displayName: "Home", normalizedName: "home" }],
-    displayUploader: "Dev Shah",
-  },
-  {
-    document: {
-      id: "fixture-vaccine",
-      title: "Vaccination records",
-      originalFilename: "vaccination_records.pdf",
-      mediaType: "application/pdf",
-      sizeBytes: 1100000,
-      sha256: "fixture",
-      status: "ready",
-      indexStatus: "not_scheduled",
-      uploaderId: "mira",
-      version: 1,
-      createdAt: "2025-03-11T08:25:00Z",
-      updatedAt: "2025-03-11T08:25:00Z",
-    },
-    tags: [{ id: "health", displayName: "Health", normalizedName: "health" }],
-    displayUploader: "Mira Shah",
-  },
-];
-
-const fixtureMembers: Member[] = [
-  {
-    id: "mira",
-    email: "mira@aether.local",
-    displayName: "Mira Shah",
-    role: "admin",
-    status: "active",
-    createdAt: "2025-01-01T00:00:00Z",
-    updatedAt: "2025-07-12T00:00:00Z",
-  },
-  {
-    id: "dev",
-    email: "dev@aether.local",
-    displayName: "Dev Shah",
-    role: "member",
-    status: "active",
-    createdAt: "2025-01-04T00:00:00Z",
-    updatedAt: "2025-06-30T00:00:00Z",
-  },
-  {
-    id: "nisha",
-    email: "nisha@aether.local",
-    displayName: "Nisha Shah",
-    role: "member",
-    status: "disabled",
-    createdAt: "2025-02-12T00:00:00Z",
-    updatedAt: "2025-05-18T00:00:00Z",
-  },
-];
-
-const fixtureTags: Tag[] = [
-  { id: "home", displayName: "Home", normalizedName: "home" },
-  { id: "health", displayName: "Health", normalizedName: "health" },
-  { id: "identity", displayName: "Identity", normalizedName: "identity" },
-  { id: "insurance", displayName: "Insurance", normalizedName: "insurance" },
-  { id: "legal", displayName: "Legal", normalizedName: "legal" },
-  { id: "tax", displayName: "Tax", normalizedName: "tax" },
-];
-
-const demoSession: Session = {
-  member: fixtureMembers[0],
-};
+type DocumentItem = DocumentRecord;
 
 function initials(name: string): string {
   return name
@@ -348,10 +183,14 @@ function AccountMenu({
 
 function Navigation({
   session,
+  documents,
+  tags,
   open,
   onClose,
 }: {
   session: Session;
+  documents: DocumentItem[];
+  tags: Tag[];
   open: boolean;
   onClose: () => void;
 }) {
@@ -374,7 +213,7 @@ function Navigation({
             route="library"
             icon={Archive}
             label="Library"
-            count="24"
+            count={String(documents.filter((item) => item.document.status !== "deleted").length)}
           />
           <NavItem
             href="/library/recent"
@@ -387,14 +226,14 @@ function Navigation({
             route="tags"
             icon={Tags}
             label="Tags"
-            count="6"
+            count={String(tags.length)}
           />
           <NavItem
             href="/trash"
             route="trash"
             icon={Trash2}
             label="Trash"
-            count="2"
+            count={String(documents.filter((item) => item.document.status === "deleted").length)}
           />
         </nav>
         {isAdmin && (
@@ -416,7 +255,7 @@ function Navigation({
           <p>
             Original files stay preserved. Metadata makes them easier to find.
           </p>
-          <span>Vault connected</span>
+          <span>Session authenticated</span>
         </div>
       </aside>
     </>
@@ -502,6 +341,8 @@ function Status({ status }: { status: string }) {
     return (
       <span className="vault-status vault-status--failed">Needs attention</span>
     );
+  if (status === "deleted")
+    return <span className="vault-status vault-status--failed">Deleted</span>;
   return (
     <span className="vault-status vault-status--processing">Processing</span>
   );
@@ -512,7 +353,7 @@ function DocumentRow({
   selected,
   onSelect,
 }: {
-  item: FixtureDocument;
+  item: DocumentItem;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -557,7 +398,7 @@ function DocumentRow({
         </div>
       </div>
       <div className="vault-cell vault-cell--muted">
-        {item.displayUploader}
+        {item.document.uploaderId}
         <br />
         {formatDate(item.document.updatedAt)}
       </div>
@@ -581,7 +422,7 @@ function DocumentGridCard({
   selected,
   onSelect,
 }: {
-  item: FixtureDocument;
+  item: DocumentItem;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -621,6 +462,7 @@ function DocumentGridCard({
 function LibraryWorkspace({
   route,
   documents,
+  availableTags,
   selectedId,
   onSelect,
   query,
@@ -629,7 +471,8 @@ function LibraryWorkspace({
   loading,
 }: {
   route: RouteName;
-  documents: FixtureDocument[];
+  documents: DocumentItem[];
+  availableTags: Tag[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   query: string;
@@ -705,14 +548,14 @@ function LibraryWorkspace({
           <span className="vault-toolbar__label">
             {filtered.length} documents
           </span>
-          <button
-            className="vault-filter"
-            type="button"
-            onClick={() => setFilterTag(filterTag ? "" : "home")}
-          >
-            <Filter size={14} aria-hidden="true" />{" "}
-            {filterTag ? `Tag: ${filterTag}` : "Filter"}
-          </button>
+          <label className="vault-select">
+            <Filter size={14} aria-hidden="true" />
+            <select aria-label="Filter by tag" value={filterTag} onChange={(event) => setFilterTag(event.target.value)}>
+              <option value="">All tags</option>
+              {availableTags.map((tag) => <option key={tag.id} value={tag.normalizedName}>{tag.displayName}</option>)}
+            </select>
+            <ChevronDown size={12} aria-hidden="true" />
+          </label>
           {filterTag && (
             <button
               className="vault-filter"
@@ -737,16 +580,7 @@ function LibraryWorkspace({
             </select>
             <ChevronDown size={12} aria-hidden="true" />
           </label>
-          <button
-            className="vault-filter"
-            type="button"
-            onClick={() =>
-              setMatch((current) => (current === "all" ? "any" : "all"))
-            }
-          >
-            <Tags size={14} aria-hidden="true" />{" "}
-            {match === "all" ? "All tags" : "Any tag"}
-          </button>
+          {filterTag && <button className="vault-filter" type="button" onClick={() => setMatch((current) => current === "all" ? "any" : "all")}><Tags size={14} aria-hidden="true" /> {match === "all" ? "All tags" : "Any tags"}</button>}
           <div className="vault-view-toggle" aria-label="View mode">
             <button
               type="button"
@@ -835,12 +669,9 @@ function LibraryWorkspace({
   );
 }
 
-function Preview({ item }: { item: FixtureDocument }) {
+function Preview({ item }: { item: DocumentItem }) {
   const kind = fileKind(item.document.mediaType);
-  const isFixture =
-    item.document.id.startsWith("fixture-") ||
-    item.document.id.startsWith("upload-");
-  if (!isFixture && kind === "image")
+  if (kind === "image")
     return (
       <div className="vault-preview vault-preview--image">
         <img
@@ -852,34 +683,13 @@ function Preview({ item }: { item: FixtureDocument }) {
         </span>
       </div>
     );
-  if (!isFixture && kind === "pdf")
+  if (kind === "pdf")
     return (
       <div className="vault-preview vault-preview--document">
         <iframe
           title={`Preview of ${item.document.title}`}
           src={api.getDocumentContentUrl(item.document.id)}
         />
-      </div>
-    );
-  if (kind === "image")
-    return (
-      <div className="vault-preview vault-preview--image">
-        <span className="vault-preview__label">
-          Image preview · preserved original
-        </span>
-      </div>
-    );
-  if (kind === "pdf")
-    return (
-      <div className="vault-preview">
-        <div className="vault-preview__paper">
-          <span />
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
-        <span className="vault-preview__label">Preview · page 1 of 4</span>
       </div>
     );
   return (
@@ -898,7 +708,7 @@ function Inspector({
   onDelete,
   onDownload,
 }: {
-  item: FixtureDocument;
+  item: DocumentItem;
   onClose: () => void;
   onUpdate: (title: string, tags: string[]) => Promise<void>;
   onDelete: () => Promise<void>;
@@ -906,6 +716,7 @@ function Inspector({
 }) {
   const [title, setTitle] = useState(item.document.title);
   const [tags, setTags] = useState(item.tags.map((tag) => tag.displayName));
+  const [newTag, setNewTag] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const submit = async (event: FormEvent) => {
@@ -996,13 +807,20 @@ function Inspector({
                 </button>
               </span>
             ))}
-            <button
-              className="vault-add-tag"
-              type="button"
-              onClick={() => setTags((current) => [...current, "New tag"])}
-            >
-              <Plus size={11} aria-hidden="true" /> Add tag
-            </button>
+            <input
+              className="vault-edit-input vault-add-tag-input"
+              aria-label="Add a tag"
+              placeholder="Add a tag"
+              value={newTag}
+              onChange={(event) => setNewTag(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && newTag.trim()) {
+                  event.preventDefault();
+                  setTags((current) => [...current, newTag.trim()]);
+                  setNewTag("");
+                }
+              }}
+            />
           </div>
         </section>
         {message && (
@@ -1042,11 +860,30 @@ function Inspector({
 
 function TagsPage({
   tags,
+  documents,
   onOpenTag,
+  onCreateTag,
 }: {
   tags: Tag[];
+  documents: DocumentItem[];
   onOpenTag: (tag: Tag) => void;
+  onCreateTag: (name: string) => Promise<void>;
 }) {
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
+  const create = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim()) return;
+    try {
+      await onCreateTag(name.trim());
+      setName("");
+      setCreating(false);
+      setMessage("Tag created");
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    }
+  };
   return (
     <section className="vault-page" aria-labelledby="tags-title">
       <div className="vault-page__header">
@@ -1056,12 +893,29 @@ function TagsPage({
             Reusable labels that make one shared library easier to navigate.
           </p>
         </div>
-        <button className="vault-button vault-button--quiet" type="button">
-          <Plus size={14} aria-hidden="true" /> New tag
-        </button>
+        {creating ? (
+          <form onSubmit={(event) => void create(event)} style={{ alignItems: "center", display: "flex", gap: 8 }}>
+            <input className="vault-edit-input" aria-label="New tag name" autoFocus value={name} onChange={(event) => setName(event.target.value)} />
+            <button className="vault-button vault-button--primary" type="submit">Create</button>
+            <button className="vault-button vault-button--quiet" type="button" onClick={() => setCreating(false)}>Cancel</button>
+          </form>
+        ) : (
+          <button className="vault-button vault-button--quiet" type="button" onClick={() => setCreating(true)}>
+            <Plus size={14} aria-hidden="true" /> New tag
+          </button>
+        )}
       </div>
+      {message && <div className="vault-notice" role="status">{message}</div>}
       <div className="vault-rule" />
-      <div className="vault-tag-board">
+      {tags.length === 0 ? (
+        <div className="vault-collection">
+          <div className="vault-empty">
+            <Tags size={28} aria-hidden="true" />
+            <h2>No tags yet</h2>
+            <p>Create a reusable tag from this view or while editing document metadata.</p>
+          </div>
+        </div>
+      ) : <div className="vault-tag-board">
         {tags.map((tag) => (
           <button
             className="vault-tag-card"
@@ -1075,7 +929,7 @@ function TagsPage({
             </div>
             <p>
               {
-                fixtureDocuments.filter((item) =>
+                documents.filter((item) =>
                   item.tags.some(
                     (entry) => entry.normalizedName === tag.normalizedName,
                   ),
@@ -1086,7 +940,7 @@ function TagsPage({
             </p>
           </button>
         ))}
-      </div>
+      </div>}
     </section>
   );
 }
@@ -1096,7 +950,7 @@ function TrashPage({
   onRestore,
   onPurge,
 }: {
-  documents: FixtureDocument[];
+  documents: DocumentItem[];
   onRestore: (id: string) => Promise<void>;
   onPurge: (id: string) => Promise<void>;
 }) {
@@ -1128,9 +982,9 @@ function TrashPage({
         {softDeleted.length === 0 ? (
           <div className="vault-empty">
             <Trash2 size={28} aria-hidden="true" />
-            <h2>Trash is empty</h2>
+            <h2>No deleted documents available</h2>
             <p>
-              Deleted documents will appear here with their recovery details.
+              The current documents endpoint returns ready records only. The backend must expose deleted records before Trash can list them.
             </p>
           </div>
         ) : (
@@ -1153,7 +1007,7 @@ function TrashPage({
                 Deleted{" "}
                 {item.document.deletedAt
                   ? formatDate(item.document.deletedAt)
-                  : "recently"}
+                  : "Deletion time unavailable"}
               </div>
               <div className="vault-cell">
                 <button
@@ -1316,10 +1170,10 @@ function UploadQueue({
 }: {
   files: File[];
   onClose: () => void;
-  onComplete: (item: FixtureDocument, finished: boolean) => void;
+  onComplete: (item: DocumentItem, finished: boolean) => void;
 }) {
   const [index, setIndex] = useState(0);
-  const [progress, setProgress] = useState(12);
+  const [progress, setProgress] = useState<number | null>(null);
   const [status, setStatus] = useState("Uploading original…");
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -1329,7 +1183,7 @@ function UploadQueue({
     let active = true;
     const upload = async () => {
       setFailed(false);
-      setProgress(12);
+      setProgress(null);
       setStatus("Uploading original…");
       try {
         const result = await api.uploadDocument(
@@ -1345,48 +1199,16 @@ function UploadQueue({
         );
         if (!active) return;
         setProgress(100);
-        setStatus("Added to Library");
+        setStatus("Upload complete");
         onComplete(
-          { ...result.data, displayUploader: "You" },
+          result.data,
           index === files.length - 1,
         );
         if (index < files.length - 1) setIndex((current) => current + 1);
       } catch (error) {
         if (!active) return;
-        const isNetworkFailure =
-          error &&
-          typeof error === "object" &&
-          "status" in error &&
-          error.status === 0;
-        if (isNetworkFailure) {
-          setProgress(100);
-          setStatus("Preview mode · added locally");
-          onComplete(
-            {
-              document: {
-                id: `upload-${Date.now()}`,
-                title: file.name.replace(/\.[^.]+$/, ""),
-                originalFilename: file.name,
-                mediaType: file.type || "application/octet-stream",
-                sizeBytes: file.size,
-                sha256: "pending",
-                status: "ready",
-                indexStatus: "not_scheduled",
-                uploaderId: "mira",
-                version: 1,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-              },
-              tags: [],
-              displayUploader: "You",
-            },
-            index === files.length - 1,
-          );
-          if (index < files.length - 1) setIndex((current) => current + 1);
-        } else {
-          setFailed(true);
-          setStatus(getErrorMessage(error));
-        }
+        setFailed(true);
+        setStatus(getErrorMessage(error));
       }
     };
     void upload();
@@ -1416,10 +1238,10 @@ function UploadQueue({
         <span className="vault-upload-item__copy">
           <strong>{file.name}</strong>
           <span>
-            {progress >= 100 || failed ? status : `${status} ${progress}%`}
+            {progress === null || failed ? status : `${status} ${progress}%`}
           </span>
           <span className="vault-upload-progress">
-            <span style={{ width: `${progress}%` }} />
+            <span style={{ width: progress === null ? "38%" : `${progress}%` }} />
           </span>
         </span>
         {failed && (
@@ -1586,6 +1408,21 @@ function SignedOut({ disabled = false }: { disabled?: boolean }) {
   );
 }
 
+function ConnectionFailure({ message }: { message: string }) {
+  return (
+    <main className="vault-login">
+      <section className="vault-login__sheet">
+        <Brand />
+        <h1>Vault unavailable.</h1>
+        <p>{message}</p>
+        <button className="vault-button vault-button--primary" type="button" onClick={() => window.location.reload()}>
+          Try again
+        </button>
+      </section>
+    </main>
+  );
+}
+
 /** Renders the Archive Worktable vault with responsive navigation, catalog browsing, and inspector flows. */
 export default function VaultApp() {
   const [session, setSession] = useState<Session | null>(null);
@@ -1595,14 +1432,11 @@ export default function VaultApp() {
   const [route, setRoute] = useState<RouteName>(() =>
     getRoute(window.location.pathname),
   );
-  const [documents, setDocuments] =
-    useState<FixtureDocument[]>(fixtureDocuments);
-  const [tags, setTags] = useState<Tag[]>(fixtureTags);
-  const [members, setMembers] = useState<Member[]>(fixtureMembers);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    getDocumentIdFromPath(window.location.pathname) ??
-      fixtureDocuments[0]?.document.id ??
-      null,
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    getDocumentIdFromPath(window.location.pathname),
   );
   const [query, setQuery] = useState("");
   const [navOpen, setNavOpen] = useState(false);
@@ -1615,23 +1449,10 @@ export default function VaultApp() {
     setLoading(true);
     try {
       const result = await api.listDocuments();
-      setDocuments(
-        result.data.documents.map((item) => ({
-          ...item,
-          displayUploader: item.document.uploaderId,
-        })),
-      );
+      setDocuments(result.data.documents);
       setError("");
     } catch (requestError) {
-      if (
-        !(
-          requestError &&
-          typeof requestError === "object" &&
-          "status" in requestError &&
-          requestError.status === 0
-        )
-      )
-        setError(getErrorMessage(requestError));
+      setError(getErrorMessage(requestError));
     } finally {
       setLoading(false);
     }
@@ -1650,8 +1471,8 @@ export default function VaultApp() {
     try {
       const result = await api.listMembers();
       setMembers(result.data.members);
-    } catch {
-      // Fixture members remain available when the optional admin request is unavailable.
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
     }
   }, [session]);
   useEffect(() => {
@@ -1672,8 +1493,8 @@ export default function VaultApp() {
         if (status === 403) setSessionState("disabled");
         else if (status === 401) setSessionState("signed-out");
         else {
-          setSession(demoSession);
-          setSessionState("ready");
+          setError(getErrorMessage(requestError));
+          setSessionState("error");
         }
       });
   }, []);
@@ -1683,8 +1504,8 @@ export default function VaultApp() {
       try {
         const result = await api.listTags("", 100);
         setTags(result.data.tags);
-      } catch {
-        // Fixture tags remain available when the optional catalog request is unavailable.
+      } catch (requestError) {
+        setError(getErrorMessage(requestError));
       }
     };
     void refreshTags();
@@ -1701,10 +1522,7 @@ export default function VaultApp() {
         tags: nextTags,
         version: selected.document.version,
       });
-      const updated: FixtureDocument = {
-        ...result.data,
-        displayUploader: selected.displayUploader,
-      };
+      const updated: DocumentItem = result.data;
       setDocuments((current) =>
         current.map((item) =>
           item.document.id === selected.document.id ? updated : item,
@@ -1759,7 +1577,7 @@ export default function VaultApp() {
     }
   };
   const completeUpload = useCallback(
-    (item: FixtureDocument, finished: boolean) => {
+    (item: DocumentItem, finished: boolean) => {
       setDocuments((current) => [item, ...current]);
       if (finished) {
         setUploadFiles([]);
@@ -1783,6 +1601,9 @@ export default function VaultApp() {
     );
   if (sessionState === "signed-out") return <SignedOut />;
   if (sessionState === "disabled") return <SignedOut disabled />;
+  if (sessionState === "error") {
+    return <ConnectionFailure message={error || "The server could not be reached."} />;
+  }
   if (!session) return <SignedOut />;
   const isWorkspace = route === "library" || route === "recent";
   return (
@@ -1797,6 +1618,8 @@ export default function VaultApp() {
       <div className="vault-layout">
         <Navigation
           session={session}
+          documents={documents}
+          tags={tags}
           open={navOpen}
           onClose={() => setNavOpen(false)}
         />
@@ -1820,6 +1643,7 @@ export default function VaultApp() {
               documents={documents.filter(
                 (item) => item.document.status !== "deleted",
               )}
+              availableTags={tags}
               selectedId={selectedId}
               onSelect={openDocument}
               query={query}
@@ -1831,9 +1655,14 @@ export default function VaultApp() {
           {route === "tags" && (
             <TagsPage
               tags={tags}
+              documents={documents}
               onOpenTag={(tag) => {
                 setQuery(tag.displayName);
                 navigate("/library");
+              }}
+              onCreateTag={async (name) => {
+                const created = await api.createTag(name);
+                setTags((current) => [...current, created.data]);
               }}
             />
           )}

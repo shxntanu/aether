@@ -16,6 +16,7 @@ const buttonVariants = cva("ui-button", {
       default: "ui-button--default-size",
       sm: "ui-button--sm",
       icon: "ui-button--icon",
+      "icon-sm": "ui-button--icon-sm",
     },
   },
   defaultVariants: { variant: "default", size: "default" },

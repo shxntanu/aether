@@ -23,6 +23,7 @@ import { TopBar } from "@/components/TopBar";
 import { TrashPage } from "@/components/TrashPage";
 import { UploadDialog } from "@/components/UploadDialog";
 import { UploadQueue } from "@/components/UploadQueue";
+import { Button } from "@/components/ui/button";
 import "./VaultApp.css";
 
 /** Renders the Archive Worktable vault and coordinates its API-backed flows. */
@@ -247,14 +248,16 @@ export default function VaultApp() {
           {error && (
             <div className="vault-notice" role="alert">
               <CircleAlert size={14} aria-hidden="true" /> {error}
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 className="vault-button vault-button--icon"
                 type="button"
                 aria-label="Dismiss error"
                 onClick={() => setError("")}
               >
                 <X size={14} aria-hidden="true" />
-              </button>
+              </Button>
             </div>
           )}
           {isWorkspace && (

@@ -4,6 +4,9 @@ import { useState, type FormEvent } from "react";
 import type { Tag } from "@/lib/api";
 import type { DocumentItem } from "@/lib/vault";
 import { getErrorMessage } from "@/lib/vault";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 
 /** Renders reusable tags and the lightweight tag-creation form. */
 export function TagsPage({
@@ -46,35 +49,38 @@ export function TagsPage({
             onSubmit={(event) => void create(event)}
             style={{ alignItems: "center", display: "flex", gap: 8 }}
           >
-            <input
+            <Input
               className="vault-edit-input"
               aria-label="New tag name"
               autoFocus
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
-            <button
+            <Button
+              variant="default"
               className="vault-button vault-button--primary"
               type="submit"
             >
               Create
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
               className="vault-button vault-button--quiet"
               type="button"
               onClick={() => setCreating(false)}
             >
               Cancel
-            </button>
+            </Button>
           </form>
         ) : (
-          <button
+          <Button
+            variant="outline"
             className="vault-button vault-button--quiet"
             type="button"
             onClick={() => setCreating(true)}
           >
             <Plus size={14} aria-hidden="true" /> New tag
-          </button>
+          </Button>
         )}
       </div>
       {message && (
@@ -82,7 +88,7 @@ export function TagsPage({
           {message}
         </div>
       )}
-      <div className="vault-rule" />
+      <Separator className="vault-rule" />
       {tags.length === 0 ? (
         <div className="vault-collection">
           <div className="vault-empty">
@@ -97,7 +103,8 @@ export function TagsPage({
       ) : (
         <div className="vault-tag-board">
           {tags.map((tag) => (
-            <button
+            <Button
+              variant="ghost"
               className="vault-tag-card"
               key={tag.id}
               type="button"
@@ -117,7 +124,7 @@ export function TagsPage({
                   ).length
                 } documents in this scope <ChevronRight size={12} aria-hidden="true" />
               </p>
-            </button>
+            </Button>
           ))}
         </div>
       )}

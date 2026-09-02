@@ -5,6 +5,16 @@ import type { Member } from "@/lib/api";
 import { getErrorMessage, initials } from "@/lib/vault";
 
 import { Status } from "@/components/Status";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 
 /** Renders the administrator-only member allowlist and access controls. */
 export function MembersPage({
@@ -38,12 +48,12 @@ export function MembersPage({
           <p>Maintain the allowlist and access level for your private vault.</p>
         </div>
       </div>
-      <div className="vault-rule" />
+      <Separator className="vault-rule" />
       <form className="vault-notice" onSubmit={(event) => void add(event)}>
         <UserRound size={14} aria-hidden="true" />
         <label htmlFor="member-email" style={{ flex: 1 }}>
           <span className="vault-toolbar__label">Add email</span>
-          <input
+          <Input
             className="vault-edit-input"
             id="member-email"
             type="email"
@@ -52,21 +62,30 @@ export function MembersPage({
             placeholder="name@example.com"
           />
         </label>
-        <select
-          className="vault-edit-input"
-          aria-label="New member role"
+        <Select
           value={role}
-          onChange={(event) =>
-            setRole(event.target.value as "member" | "admin")
+          onValueChange={(value) =>
+            setRole(value as "member" | "admin")
           }
-          style={{ width: 120 }}
         >
-          <option value="member">Member</option>
-          <option value="admin">Admin</option>
-        </select>
-        <button className="vault-button vault-button--primary" type="submit">
+          <SelectTrigger
+            aria-label="New member role"
+            className="vault-member-role"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent align="end" className="vault-select-content">
+            <SelectItem value="member">Member</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant="default"
+          className="vault-button vault-button--primary"
+          type="submit"
+        >
           <Plus size={14} aria-hidden="true" /> Add
-        </button>
+        </Button>
       </form>
       {notice && (
         <div className="vault-notice" role="status">
@@ -99,7 +118,9 @@ export function MembersPage({
                 status={member.status === "active" ? "ready" : "failed"}
               />
             </span>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               className="vault-member-action"
               type="button"
               onClick={() =>
@@ -114,7 +135,7 @@ export function MembersPage({
               }
             >
               {member.status === "active" ? "Disable" : "Reactivate"}
-            </button>
+            </Button>
           </div>
         ))}
       </div>

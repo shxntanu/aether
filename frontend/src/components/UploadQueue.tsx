@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { DocumentItem } from "@/lib/vault";
 import { getErrorMessage } from "@/lib/vault";
+import { Button } from "@/components/ui/button";
 
 /** Uploads selected files sequentially and reports completed catalog records. */
 export function UploadQueue({
@@ -65,14 +66,16 @@ export function UploadQueue({
         <span>
           {failed ? `${index + 1} failed` : `${index + 1} of ${files.length}`}
         </span>
-        <button
+        <Button
+          variant="ghost"
+          size="icon"
           className="vault-upload-queue__close"
           type="button"
           aria-label="Close upload queue"
           onClick={onClose}
         >
           <X size={15} aria-hidden="true" />
-        </button>
+        </Button>
       </div>
       <div className="vault-upload-item">
         <Upload size={15} aria-hidden="true" />
@@ -88,13 +91,15 @@ export function UploadQueue({
           </span>
         </span>
         {failed && (
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             className="vault-member-action"
             type="button"
             onClick={() => setAttempt((current) => current + 1)}
           >
             Retry
-          </button>
+          </Button>
         )}
       </div>
     </div>

@@ -1,14 +1,22 @@
+import { Badge } from "@/components/ui/badge";
+
 /** Renders the user-facing lifecycle badge for documents and members. */
 export function Status({ status }: { status: string }) {
   if (status === "ready")
-    return <span className="vault-status vault-status--ready">Ready</span>;
+    return <Badge className="vault-status vault-status--ready">Ready</Badge>;
   if (status === "failed")
     return (
-      <span className="vault-status vault-status--failed">Needs attention</span>
+      <Badge className="vault-status vault-status--failed">
+        Needs attention
+      </Badge>
     );
   if (status === "deleted")
-    return <span className="vault-status vault-status--failed">Deleted</span>;
+    return (
+      <Badge className="vault-status vault-status--failed">Deleted</Badge>
+    );
   return (
-    <span className="vault-status vault-status--processing">Processing</span>
+    <Badge className="vault-status vault-status--processing">
+      Processing
+    </Badge>
   );
 }

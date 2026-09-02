@@ -1,7 +1,6 @@
 import {
   Archive,
   Clock3,
-  LogOut,
   Shield,
   Tags,
   Trash2,
@@ -39,28 +38,6 @@ function NavItem({ href, route, icon: Icon, label, count }: NavItemProps) {
       <span>{label}</span>
       {count && <span className="vault-nav__count">{count}</span>}
     </a>
-  );
-}
-
-type AccountMenuProps = {
-  onLogout: () => void;
-  onClose: () => void;
-};
-
-/** Renders the account action menu and closes it before signing out. */
-export function AccountMenu({ onLogout, onClose }: AccountMenuProps) {
-  return (
-    <div className="vault-account-menu" role="menu">
-      <button
-        type="button"
-        onClick={() => {
-          onClose();
-          onLogout();
-        }}
-      >
-        <LogOut aria-hidden="true" /> Sign out
-      </button>
-    </div>
   );
 }
 

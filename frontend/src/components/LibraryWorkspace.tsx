@@ -1,6 +1,5 @@
 import {
   Archive,
-  ChevronDown,
   Filter,
   Grid2X2,
   List,
@@ -21,6 +20,15 @@ import {
 
 import { DocumentGridCard } from "@/components/DocumentGridCard";
 import { DocumentRow } from "@/components/DocumentRow";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 
 /** Renders the searchable, filterable, and sortable document collection. */
 export function LibraryWorkspace({
@@ -90,70 +98,79 @@ export function LibraryWorkspace({
           <p>{subtitle}</p>
         </div>
         <div className="vault-heading__actions">
-          <button
+          <Button
+            variant="outline"
             className="vault-button vault-button--quiet"
             type="button"
             onClick={onRefresh}
           >
             <RotateCcw size={14} aria-hidden="true" /> Refresh
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="default"
             className="vault-button vault-button--primary"
             type="button"
             onClick={onUpload}
           >
             <Plus size={15} aria-hidden="true" /> Add document
-          </button>
+          </Button>
         </div>
       </div>
-      <div className="vault-rule" />
+      <Separator className="vault-rule" />
       <div className="vault-toolbar">
         <div className="vault-toolbar__left">
           <span className="vault-toolbar__label">
             {filtered.length} documents
           </span>
-          <label className="vault-select">
+          <div className="vault-select">
             <Filter size={14} aria-hidden="true" />
-            <select
-              aria-label="Filter by tag"
-              value={filterTag}
-              onChange={(event) => setFilterTag(event.target.value)}
+            <Select
+              value={filterTag || null}
+              onValueChange={(value) => setFilterTag(value ?? "")}
             >
-              <option value="">All tags</option>
-              {availableTags.map((tag) => (
-                <option key={tag.id} value={tag.normalizedName}>
-                  {tag.displayName}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={12} aria-hidden="true" />
-          </label>
+              <SelectTrigger aria-label="Filter by tag" className="vault-select__trigger">
+                <SelectValue placeholder="All tags" />
+              </SelectTrigger>
+              <SelectContent align="start" className="vault-select-content">
+                {availableTags.map((tag) => (
+                  <SelectItem key={tag.id} value={tag.normalizedName}>
+                    {tag.displayName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {filterTag && (
-            <button
+            <Button
+              variant="ghost"
               className="vault-filter"
               type="button"
               onClick={() => setFilterTag("")}
             >
               <X size={13} aria-hidden="true" /> Clear
-            </button>
+            </Button>
           )}
         </div>
         <div className="vault-toolbar__right">
-          <label className="vault-select">
-            Sort by{" "}
-            <select
-              aria-label="Sort documents"
+          <div className="vault-select vault-select--sort">
+            <span>Sort by</span>
+            <Select
               value={sort}
-              onChange={(event) => setSort(event.target.value)}
+              onValueChange={(value) => setSort(value ?? "updated")}
             >
-              <option value="updated">Last modified</option>
-              <option value="title">Title</option>
-              <option value="size">File size</option>
-            </select>
-            <ChevronDown size={12} aria-hidden="true" />
-          </label>
+              <SelectTrigger aria-label="Sort documents" className="vault-select__trigger">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end" className="vault-select-content">
+                <SelectItem value="updated">Last modified</SelectItem>
+                <SelectItem value="title">Title</SelectItem>
+                <SelectItem value="size">File size</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {filterTag && (
-            <button
+            <Button
+              variant="ghost"
               className="vault-filter"
               type="button"
               onClick={() =>
@@ -162,25 +179,27 @@ export function LibraryWorkspace({
             >
               <Tags size={14} aria-hidden="true" />{" "}
               {match === "all" ? "All tags" : "Any tags"}
-            </button>
+            </Button>
           )}
           <div className="vault-view-toggle" aria-label="View mode">
-            <button
+            <Button
+              variant="ghost"
               type="button"
               aria-label="List view"
               aria-pressed={viewMode === "list"}
               onClick={() => setViewMode("list")}
             >
               <List size={15} aria-hidden="true" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               type="button"
               aria-label="Grid view"
               aria-pressed={viewMode === "grid"}
               onClick={() => setViewMode("grid")}
             >
               <Grid2X2 size={15} aria-hidden="true" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -201,13 +220,14 @@ export function LibraryWorkspace({
               Try removing a filter or searching by a different title, filename,
               or tag.
             </p>
-            <button
+            <Button
+              variant="outline"
               className="vault-button vault-button--quiet"
               type="button"
               onClick={() => setFilterTag("")}
             >
               Clear filters
-            </button>
+            </Button>
           </div>
         </div>
       ) : (

@@ -1,10 +1,56 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
 
 :root {
   background: #f5f6f2;
   color: #14222c;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+
+  /* shadcn primitives inherit these values so their surfaces stay Aether. */
+  --background: #f5f6f2;
+  --foreground: #14222c;
+  --card: #ffffff;
+  --card-foreground: #14222c;
+  --popover: #ffffff;
+  --popover-foreground: #14222c;
+  --primary: #c7ff3d;
+  --primary-foreground: #14222c;
+  --secondary: #eceee8;
+  --secondary-foreground: #51606a;
+  --muted: #eceee8;
+  --muted-foreground: #7a858b;
+  --accent: #eceee8;
+  --accent-foreground: #14222c;
+  --destructive: #aa4c43;
+  --destructive-foreground: #ffffff;
+  --border: #dbe1dc;
+  --input: #cbd3cc;
+  --ring: #91b51f;
+  --radius: 0.5625rem;
+  --radius-md: 0.5625rem;
 }
 
 * { box-sizing: border-box; }

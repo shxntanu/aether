@@ -4,6 +4,8 @@ import type { DocumentItem } from "@/lib/vault";
 import { fileKind, formatBytes, formatDate } from "@/lib/vault";
 
 import { FileIcon } from "@/components/FileIcon";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 /** Renders one selectable document in the library's list presentation. */
 export function DocumentRow({
@@ -46,9 +48,9 @@ export function DocumentRow({
         <div className="vault-tags">
           {item.tags.length > 0 ? (
             item.tags.map((tag) => (
-              <span className="vault-tag" key={tag.id}>
+              <Badge variant="outline" className="vault-tag" key={tag.id}>
                 {tag.displayName}
-              </span>
+              </Badge>
             ))
           ) : (
             <span className="vault-cell--muted">No tags</span>
@@ -63,14 +65,16 @@ export function DocumentRow({
       <div className="vault-cell vault-cell--size">
         {formatBytes(item.document.sizeBytes)}
       </div>
-      <button
+      <Button
+        variant="ghost"
+        size="icon"
         className="vault-button vault-button--icon vault-more"
         aria-label={`More actions for ${item.document.title}`}
         type="button"
         onClick={(event) => event.stopPropagation()}
       >
         <MoreHorizontal size={17} aria-hidden="true" />
-      </button>
+      </Button>
     </div>
   );
 }

@@ -1,16 +1,21 @@
-import {
-  CircleAlert,
-  Download,
-  Trash2,
-  X,
-} from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { CircleAlert, Download, Trash2, X } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import type { DocumentItem } from "@/lib/vault";
 import { formatBytes, formatDate, getErrorMessage } from "@/lib/vault";
 
 import { Preview } from "@/components/Preview";
 import { Status } from "@/components/Status";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 
 /** Renders and saves editable metadata for the selected document. */
 export function Inspector({
@@ -31,6 +36,13 @@ export function Inspector({
   const [newTag, setNewTag] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setOpen(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -45,22 +57,37 @@ export function Inspector({
     }
   };
   return (
-    <aside className="vault-inspector" aria-label="Document inspector">
-      <div className="vault-inspector__head">
-        <h2>Archive inspector</h2>
-        <button
-          className="vault-button vault-button--icon"
-          aria-label="Close inspector"
-          type="button"
-          onClick={onClose}
-        >
-          <X size={17} aria-hidden="true" />
-        </button>
-      </div>
-      <form
-        className="vault-inspector__body"
-        onSubmit={(event) => void submit(event)}
+    <Sheet
+      open={open}
+      onOpenChange={setOpen}
+      onOpenChangeComplete={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+    >
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="vault-inspector"
+        aria-label="Document inspector"
       >
+        <SheetHeader className="vault-inspector__head">
+          <SheetTitle>Archive inspector</SheetTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="vault-button vault-button--icon"
+            aria-label="Close inspector"
+            type="button"
+            onClick={() => setOpen(false)}
+          >
+            <X size={17} aria-hidden="true" />
+          </Button>
+        </SheetHeader>
+        <ScrollArea className="vault-inspector__scroll">
+          <form
+            className="vault-inspector__body"
+            onSubmit={(event) => void submit(event)}
+          >
         <Preview item={item} />
         <h3 className="vault-inspector__title">{item.document.title}</h3>
         <p className="vault-inspector__filename">
@@ -95,7 +122,7 @@ export function Inspector({
           <label className="vault-toolbar__label" htmlFor="inspector-title">
             Display title
           </label>
-          <input
+          <Input
             className="vault-edit-input"
             id="inspector-title"
             value={title}
@@ -104,9 +131,11 @@ export function Inspector({
           <h3 style={{ marginTop: 18 }}>Reusable tags</h3>
           <div className="vault-tag-editor">
             {tags.map((tag) => (
-              <span className="vault-tag" key={tag}>
+              <Badge variant="outline" className="vault-tag" key={tag}>
                 {tag}
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon"
                   type="button"
                   aria-label={`Remove ${tag} tag`}
                   onClick={() =>
@@ -116,10 +145,10 @@ export function Inspector({
                   }
                 >
                   <X size={11} aria-hidden="true" />
-                </button>
-              </span>
+                </Button>
+              </Badge>
             ))}
-            <input
+            <Input
               className="vault-edit-input vault-add-tag-input"
               aria-label="Add a tag"
               placeholder="Add a tag"
@@ -141,31 +170,36 @@ export function Inspector({
           </div>
         )}
         <div className="vault-inspector__actions">
-          <button
+          <Button
+            variant="outline"
             className="vault-button vault-button--quiet"
             type="button"
             onClick={onDownload}
           >
             <Download size={14} aria-hidden="true" /> Download
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="default"
             className="vault-button vault-button--primary"
             type="submit"
             disabled={saving}
           >
             {saving ? "Saving…" : "Save changes"}
-          </button>
+          </Button>
         </div>
-      </form>
-      <div className="vault-inspector__footer">
-        <button
+          </form>
+        </ScrollArea>
+        <div className="vault-inspector__footer">
+        <Button
+          variant="destructive"
           className="vault-button vault-button--danger"
           type="button"
           onClick={() => void onDelete()}
         >
           <Trash2 size={14} aria-hidden="true" /> Move to Trash
-        </button>
-      </div>
-    </aside>
+        </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

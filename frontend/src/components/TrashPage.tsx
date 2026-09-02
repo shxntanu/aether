@@ -5,6 +5,7 @@ import type { DocumentItem } from "@/lib/vault";
 import { formatDate } from "@/lib/vault";
 
 import { FileIcon } from "@/components/FileIcon";
+import { Button } from "@/components/ui/button";
 
 /** Renders recoverable documents and their restore or purge actions. */
 export function TrashPage({
@@ -73,7 +74,8 @@ export function TrashPage({
                   : "Deletion time unavailable"}
               </div>
               <div className="vault-cell">
-                <button
+                <Button
+                  variant="outline"
                   className="vault-member-action"
                   type="button"
                   onClick={() =>
@@ -83,8 +85,9 @@ export function TrashPage({
                   }
                 >
                   Restore
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="outline"
                   className="vault-member-action"
                   type="button"
                   onClick={() =>
@@ -94,7 +97,7 @@ export function TrashPage({
                   }
                 >
                   Purge
-                </button>
+                </Button>
               </div>
             </div>
           ))

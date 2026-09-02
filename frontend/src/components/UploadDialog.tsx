@@ -1,7 +1,15 @@
 import { CircleAlert, Upload, X } from "lucide-react";
-import { useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 import { supportedUploadTypes } from "@/lib/vault";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 /** Validates and collects files before handing them to the upload queue. */
 export function UploadDialog({
@@ -14,6 +22,12 @@ export function UploadDialog({
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [validationError, setValidationError] = useState("");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setOpen(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
   const acceptFiles = (files: File[]) => {
     const invalid = files.find(
       (file) =>
@@ -32,47 +46,44 @@ export function UploadDialog({
     acceptFiles(Array.from(event.target.files ?? []));
   };
   return (
-    <div className="vault-overlay" role="presentation">
-      <div
-        className="vault-login__sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="upload-dialog-title"
-        style={{ margin: "12vh auto", maxWidth: 500 }}
+    <Dialog
+      open={open}
+      onOpenChange={setOpen}
+      onOpenChangeComplete={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="vault-upload-dialog vault-login__sheet"
       >
-        <div
-          style={{
-            alignItems: "center",
-            display: "flex",
-            justifyContent: "space-between",
-          }}
-        >
-          <h2
-            id="upload-dialog-title"
-            style={{ fontSize: 22, letterSpacing: "-.04em", margin: 0 }}
-          >
+        <DialogHeader className="vault-upload-dialog__header">
+          <DialogTitle id="upload-dialog-title">
             Add to the archive
-          </h2>
-          <button
+          </DialogTitle>
+          <Button
+            variant="ghost"
+            size="icon"
             className="vault-button vault-button--icon"
             type="button"
             aria-label="Close upload dialog"
-            onClick={onClose}
+            onClick={() => setOpen(false)}
           >
             <X size={17} aria-hidden="true" />
-          </button>
-        </div>
-        <p>
+          </Button>
+        </DialogHeader>
+        <DialogDescription className="vault-upload-dialog__description">
           Original files are preserved exactly as uploaded. PDF, JPEG, PNG, and
           WebP files up to 50 MB are supported.
-        </p>
-        <button
+        </DialogDescription>
+        <Button
+          variant="default"
           className="vault-button vault-button--primary"
           type="button"
           onClick={() => inputRef.current?.click()}
         >
           <Upload size={15} aria-hidden="true" /> Choose files
-        </button>
+        </Button>
         <button
           type="button"
           onDragEnter={(event) => {
@@ -120,7 +131,7 @@ export function UploadDialog({
           You can add a title and reusable tags from the document inspector
           after upload.
         </p>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

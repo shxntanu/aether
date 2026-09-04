@@ -128,7 +128,7 @@ export function Inspector({
             value={title}
             onChange={(event) => setTitle(event.target.value)}
           />
-          <h3 style={{ marginTop: 18 }}>Reusable tags</h3>
+          <h3 className="vault-section-spaced">Reusable tags</h3>
           <div className="vault-tag-editor">
             {tags.map((tag) => (
               <Badge variant="outline" className="vault-tag" key={tag}>

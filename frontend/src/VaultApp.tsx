@@ -26,7 +26,7 @@ import { UploadQueue } from "@/components/UploadQueue";
 import { Button } from "@/components/ui/button";
 import "./VaultApp.css";
 
-/** Renders the Archive Worktable vault and coordinates its API-backed flows. */
+/** Renders the Celestial Archive Garden vault and coordinates its API-backed flows. */
 export default function VaultApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [sessionState, setSessionState] = useState<
@@ -47,6 +47,7 @@ export default function VaultApp() {
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const closeNavigation = useCallback(() => setNavOpen(false), []);
 
   const loadDocuments = useCallback(async () => {
     setLoading(true);
@@ -231,7 +232,8 @@ export default function VaultApp() {
     <div className="vault-app">
       <TopBar
         session={session}
-        onMenu={() => setNavOpen(true)}
+        onMenu={() => setNavOpen((current) => !current)}
+        navOpen={navOpen}
         onSearch={setQuery}
         onUpload={() => setUploadOpen(true)}
         onLogout={() => void logout()}
@@ -242,7 +244,7 @@ export default function VaultApp() {
           documents={documents}
           tags={tags}
           open={navOpen}
-          onClose={() => setNavOpen(false)}
+          onClose={closeNavigation}
         />
         <main className="vault-main">
           {error && (
@@ -346,10 +348,14 @@ export default function VaultApp() {
       {uploadFiles.length > 0 && (
         <UploadQueue
           files={uploadFiles}
-          onClose={() => setUploadFiles([])}
+          onClose={() => {
+            setUploadFiles([]);
+            setUploadOpen(false);
+          }}
           onComplete={completeUpload}
         />
       )}
+      <footer className="vault-wave-footer" aria-hidden="true" />
     </div>
   );
 }

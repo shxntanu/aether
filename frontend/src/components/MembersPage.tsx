@@ -51,7 +51,7 @@ export function MembersPage({
       <Separator className="vault-rule" />
       <form className="vault-notice" onSubmit={(event) => void add(event)}>
         <UserRound size={14} aria-hidden="true" />
-        <label htmlFor="member-email" style={{ flex: 1 }}>
+        <label className="vault-member-email" htmlFor="member-email">
           <span className="vault-toolbar__label">Add email</span>
           <Input
             className="vault-edit-input"

@@ -5,7 +5,6 @@ import { fileKind, formatBytes, formatDate } from "@/lib/vault";
 
 import { FileIcon } from "@/components/FileIcon";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 
 /** Renders one selectable document in the library's list presentation. */
 export function DocumentRow({
@@ -65,16 +64,9 @@ export function DocumentRow({
       <div className="vault-cell vault-cell--size">
         {formatBytes(item.document.sizeBytes)}
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="vault-button vault-button--icon vault-more"
-        aria-label={`More actions for ${item.document.title}`}
-        type="button"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <span className="vault-more" aria-hidden="true">
         <MoreHorizontal size={17} aria-hidden="true" />
-      </Button>
+      </span>
     </div>
   );
 }

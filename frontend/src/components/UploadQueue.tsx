@@ -1,5 +1,5 @@
 import { Upload, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 import { api } from "@/lib/api";
 import type { DocumentItem } from "@/lib/vault";
@@ -84,11 +84,34 @@ export function UploadQueue({
           <span>
             {progress === null || failed ? status : `${status} ${progress}%`}
           </span>
-          <span className="vault-upload-progress">
+          {!failed && (
             <span
-              style={{ width: progress === null ? "38%" : `${progress}%` }}
-            />
-          </span>
+              className={`vault-upload-progress ${
+                progress === null ? "is-indeterminate" : ""
+              }`}
+              role="progressbar"
+              aria-label={`Uploading ${file.name}`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progress === null ? undefined : progress}
+              aria-valuetext={
+                progress === null ? "Uploading" : `${progress}%`
+              }
+            >
+              <span
+                className="vault-upload-progress__fill"
+                style={
+                  {
+                    "--vault-progress":
+                      progress === null ? 0.55 : progress / 100,
+                  } as CSSProperties
+                }
+              />
+              <span className="vault-upload-progress__label">
+                {progress === null ? "Uploading" : `${progress}%`}
+              </span>
+            </span>
+          )}
         </span>
         {failed && (
           <Button

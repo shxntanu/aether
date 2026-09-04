@@ -98,24 +98,12 @@ export function UploadDialog({
             acceptFiles(Array.from(event.dataTransfer.files));
           }}
           onClick={() => inputRef.current?.click()}
-          style={{
-            background: dragging ? "#f7fbed" : "#f5f6f2",
-            border: "1px dashed #cbd3cc",
-            borderRadius: 8,
-            color: "#51606a",
-            cursor: "pointer",
-            display: "block",
-            fontSize: 12,
-            marginTop: 12,
-            padding: "20px 14px",
-            textAlign: "center",
-            width: "100%",
-          }}
+          className={`vault-upload-dropzone ${dragging ? "is-dragging" : ""}`}
         >
           Drop files here, or click to browse
         </button>
         {validationError && (
-          <div className="vault-notice" role="alert" style={{ marginTop: 14 }}>
+          <div className="vault-notice" role="alert">
             <CircleAlert size={14} aria-hidden="true" /> {validationError}
           </div>
         )}

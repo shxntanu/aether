@@ -6,6 +6,7 @@ export function Brand() {
     <a
       className="vault-brand"
       href="/library"
+      aria-label="Aether archive home"
       onClick={(event) => {
         event.preventDefault();
         navigate("/library");

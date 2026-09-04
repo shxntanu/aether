@@ -46,8 +46,8 @@ export function TagsPage({
         </div>
         {creating ? (
           <form
+            className="vault-tag-create-form"
             onSubmit={(event) => void create(event)}
-            style={{ alignItems: "center", display: "flex", gap: 8 }}
           >
             <Input
               className="vault-edit-input"

@@ -1,4 +1,4 @@
-import { LogOut, Menu, Search, Upload } from "lucide-react";
+import { LogOut, Menu, Search, Upload, X } from "lucide-react";
 import { useState } from "react";
 
 import type { Session } from "@/lib/api";
@@ -17,12 +17,14 @@ import { initials } from "@/lib/vault";
 export function TopBar({
   session,
   onMenu,
+  navOpen,
   onSearch,
   onUpload,
   onLogout,
 }: {
   session: Session;
   onMenu: () => void;
+  navOpen: boolean;
   onSearch: (value: string) => void;
   onUpload: () => void;
   onLogout: () => void;
@@ -32,11 +34,13 @@ export function TopBar({
     <header className="vault-topbar">
       <button
         className="vault-mobile-menu"
-        aria-label="Open navigation"
+        aria-label={navOpen ? "Close navigation" : "Open navigation"}
+        aria-controls="vault-navigation"
+        aria-expanded={navOpen}
         type="button"
         onClick={onMenu}
       >
-        <Menu aria-hidden="true" />
+        {navOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
       </button>
       <Brand />
       <label className="vault-search">

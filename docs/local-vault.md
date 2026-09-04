@@ -30,7 +30,8 @@ that do not meet the vault's privacy requirements.
 - `PATCH /api/v1/documents/{id}` accepts `title`, `tags`, and `version`.
 - `GET /api/v1/documents/{id}/content` previews content and supports one
   explicit `Range: bytes=start-end` range. Add `?download=true` for attachment
-  disposition.
+  disposition. With Google Drive storage and no range, the route redirects to
+  Drive's viewer or original-content link; local storage streams through Aether.
 - `GET /api/v1/tags?q=tax&limit=20` provides tag autocomplete.
 - `POST /api/v1/tags` accepts `{"name":"Tax"}`.
 

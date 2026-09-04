@@ -212,6 +212,32 @@ func (s *Store) OpenRange(
 	return response.Body, file.objectInfo(key), nil
 }
 
+// Links returns Drive viewer and original-content links for an available file.
+func (s *Store) Links(ctx context.Context, key string) (storage.ObjectLinks, error) {
+	file, err := s.findFile(ctx, key, false)
+	if err != nil {
+		return storage.ObjectLinks{}, err
+	}
+	if file.ID == "" {
+		return storage.ObjectLinks{}, fmt.Errorf("Drive file metadata omitted ID")
+	}
+	viewURL := driveViewURL(file.ID)
+	if file.WebViewLink != "" {
+		viewURL, err = validateDriveLink(file.WebViewLink)
+		if err != nil {
+			return storage.ObjectLinks{}, fmt.Errorf("validate Drive view link: %w", err)
+		}
+	}
+	downloadURL := driveDownloadURL(file.ID)
+	if file.WebContentLink != "" {
+		downloadURL, err = validateDriveLink(file.WebContentLink)
+		if err != nil {
+			return storage.ObjectLinks{}, fmt.Errorf("validate Drive download link: %w", err)
+		}
+	}
+	return storage.ObjectLinks{ViewURL: viewURL, DownloadURL: downloadURL}, nil
+}
+
 // Stat returns metadata for an available Drive object.
 func (s *Store) Stat(ctx context.Context, key string) (storage.ObjectInfo, error) {
 	file, err := s.findFile(ctx, key, false)
@@ -380,7 +406,8 @@ func (s *Store) findFile(ctx context.Context, key string, includeTrashed bool) (
 	values := url.Values{}
 	values.Set("q", query)
 	values.Set("pageSize", "10")
-	values.Set("fields", "files(id,name,mimeType,size,modifiedTime,trashed,appProperties)")
+	values.Set("fields", "files(id,name,mimeType,size,modifiedTime,trashed,appProperties,"+
+		"webViewLink,webContentLink)")
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		s.apiBaseURL+"/files?"+values.Encode(), nil)
 	if err != nil {
@@ -434,14 +461,16 @@ func (s *Store) updateTrashed(ctx context.Context, key string, trashed bool) err
 }
 
 type driveFile struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	MimeType      string            `json:"mimeType"`
-	Size          int64             `json:"size,string"`
-	ModifiedTime  time.Time         `json:"modifiedTime"`
-	Trashed       bool              `json:"trashed"`
-	Parents       []string          `json:"parents,omitempty"`
-	AppProperties map[string]string `json:"appProperties,omitempty"`
+	ID             string            `json:"id"`
+	Name           string            `json:"name"`
+	MimeType       string            `json:"mimeType"`
+	Size           int64             `json:"size,string"`
+	ModifiedTime   time.Time         `json:"modifiedTime"`
+	Trashed        bool              `json:"trashed"`
+	Parents        []string          `json:"parents,omitempty"`
+	AppProperties  map[string]string `json:"appProperties,omitempty"`
+	WebViewLink    string            `json:"webViewLink,omitempty"`
+	WebContentLink string            `json:"webContentLink,omitempty"`
 }
 
 type driveUploadMetadata struct {
@@ -486,6 +515,29 @@ func validateKey(key string) error {
 		return fmt.Errorf("invalid Drive object key")
 	}
 	return nil
+}
+
+func validateDriveLink(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" ||
+		parsed.User != nil || parsed.Fragment != "" {
+		return "", fmt.Errorf("invalid Drive link")
+	}
+	switch strings.ToLower(parsed.Hostname()) {
+	case "drive.google.com", "docs.google.com", "drive.usercontent.google.com":
+		return raw, nil
+	default:
+		return "", fmt.Errorf("unexpected Drive link host")
+	}
+}
+
+func driveViewURL(fileID string) string {
+	return "https://drive.google.com/file/d/" + url.PathEscape(fileID) + "/view"
+}
+
+func driveDownloadURL(fileID string) string {
+	values := url.Values{"export": {"download"}, "id": {fileID}}
+	return "https://drive.google.com/uc?" + values.Encode()
 }
 
 func escapeQueryValue(value string) string {

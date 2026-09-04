@@ -39,6 +39,9 @@ var (
 	ErrInvalidRange = errors.New("invalid document byte range")
 	// ErrUploadInProgress indicates that an idempotent upload has not completed.
 	ErrUploadInProgress = errors.New("idempotent upload is still in progress")
+	// ErrContentLinkUnavailable indicates that the configured provider has no
+	// provider-hosted link capability, so content must be streamed through Aether.
+	ErrContentLinkUnavailable = errors.New("provider content link unavailable")
 )
 
 // Repository contains catalog operations required by the tagged vault.
@@ -440,6 +443,64 @@ func (s *Service) OpenContentByActor(
 		return Content{}, fmt.Errorf("record document download: %w", err)
 	}
 	return content, nil
+}
+
+// ContentLink returns a provider-hosted view or download link for a ready
+// document. Providers without this optional capability return
+// ErrContentLinkUnavailable.
+func (s *Service) ContentLink(
+	ctx context.Context,
+	id domain.DocumentID,
+	download bool,
+) (string, error) {
+	document, err := s.repository.GetDocument(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if document.Status != domain.DocumentStatusReady {
+		return "", domain.ErrNotFound
+	}
+	linker, ok := s.objects.(storage.ObjectLinker)
+	if !ok {
+		return "", ErrContentLinkUnavailable
+	}
+	links, err := linker.Links(ctx, document.StorageKey)
+	if err != nil {
+		return "", err
+	}
+	if download {
+		if links.DownloadURL == "" {
+			return "", ErrContentLinkUnavailable
+		}
+		return links.DownloadURL, nil
+	}
+	if links.ViewURL == "" {
+		return "", ErrContentLinkUnavailable
+	}
+	return links.ViewURL, nil
+}
+
+// ContentLinkByActor returns a provider-hosted link and audits the successful
+// access without opening or proxying the document body.
+func (s *Service) ContentLinkByActor(
+	ctx context.Context,
+	id domain.DocumentID,
+	download bool,
+	actorID domain.MemberID,
+) (string, error) {
+	link, err := s.ContentLink(ctx, id, download)
+	if err != nil {
+		return "", err
+	}
+	if err := s.recordDocumentEvent(
+		ctx,
+		audit.ActionDocumentDownload,
+		domain.DocumentID(id),
+		memberIDPointer(actorID),
+	); err != nil {
+		return "", fmt.Errorf("record document link access: %w", err)
+	}
+	return link, nil
 }
 
 // DeleteByActor soft-deletes a document and records the successful operation.

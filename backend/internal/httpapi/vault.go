@@ -40,6 +40,15 @@ type actorVaultService interface {
 	) (vault.Content, error)
 }
 
+type actorVaultLinkService interface {
+	ContentLinkByActor(
+		context.Context,
+		domain.DocumentID,
+		bool,
+		domain.MemberID,
+	) (string, error)
+}
+
 func registerVaultRoutes(
 	mux *http.ServeMux,
 	identityService IdentityService,
@@ -264,6 +273,25 @@ func handleDocumentContent(w http.ResponseWriter, r *http.Request, service Vault
 	if err != nil {
 		writeError(w, http.StatusRequestedRangeNotSatisfiable, "invalid_range")
 		return
+	}
+	if byteRange == nil {
+		download := r.URL.Query().Get("download") == "true"
+		if linkService, ok := service.(actorVaultLinkService); ok {
+			link, linkErr := linkService.ContentLinkByActor(
+				r.Context(),
+				domain.DocumentID(r.PathValue("id")),
+				download,
+				memberFromContext(r.Context()).ID,
+			)
+			if linkErr == nil {
+				http.Redirect(w, r, link, http.StatusFound)
+				return
+			}
+			if !errors.Is(linkErr, vault.ErrContentLinkUnavailable) {
+				writeVaultError(w, r, linkErr)
+				return
+			}
+		}
 	}
 	documentID := domain.DocumentID(r.PathValue("id"))
 	var content vault.Content

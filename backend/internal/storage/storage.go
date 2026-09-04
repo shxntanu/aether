@@ -39,6 +39,21 @@ type ObjectInfo struct {
 	LastModified time.Time
 }
 
+// ObjectLinks contains provider-hosted destinations for viewing or downloading
+// an object. Providers may omit these links when they cannot serve them.
+type ObjectLinks struct {
+	// ViewURL opens the object in the provider's viewer.
+	ViewURL string
+	// DownloadURL downloads the object's original bytes from the provider.
+	DownloadURL string
+}
+
+// ObjectLinker is an optional object-store capability for provider-hosted links.
+type ObjectLinker interface {
+	// Links returns authenticated-provider links for an object key.
+	Links(context.Context, string) (ObjectLinks, error)
+}
+
 // ObjectStore persists immutable document objects behind opaque keys.
 type ObjectStore interface {
 	// Put streams an object to key, replacing an existing object atomically.

@@ -1,9 +1,10 @@
 # Google Drive storage setup
 
-User can select Google Drive without changing vault routes or domain
-code. The application uses one designated vault-owner Google account and one
-app-managed Drive folder. It does not read arbitrary Drive files, expose Drive
-URLs, or synchronize direct Drive edits back into Aether.
+Users can select Google Drive without changing vault routes or domain code. The
+application uses one designated vault-owner Google account and one app-managed
+Drive folder. View and download requests are authenticated by Aether, then
+redirected to Drive's own viewer or download URL. Direct Drive edits are not
+synchronized back into Aether.
 
 ## 1. Create a Google Cloud project
 
@@ -42,7 +43,9 @@ Sign in to the designated vault-owner Google account at
 https://drive.google.com/drive/folders/<FOLDER_ID>
 ```
 
-Set that value as `AETHER_GDRIVE_FOLDER_ID`. Do not use a shared public folder.
+Set that value as `AETHER_GDRIVE_FOLDER_ID`. Share the folder with the Google
+accounts that are allowlisted in Aether as viewers so redirected links work for
+members. Do not make the folder or its files public.
 
 ## 4. Obtain the refresh token
 

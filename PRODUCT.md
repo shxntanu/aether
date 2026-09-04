@@ -26,7 +26,7 @@ Aether combines private group access, durable original-file storage, reusable me
 
 ## Operating Context
 
-Administrators maintain membership and the shared library. Members upload, tag, browse, search, preview, edit metadata, and download documents through the web application. Google Drive is managed as the vault's object store; browsers do not receive provider credentials or public Drive URLs. Processing may add extracted text, OCR, and suggestions while preserving the original bytes.
+Administrators maintain membership and the shared library. Members upload, tag, browse, search, preview, edit metadata, and download documents through the web application. Google Drive is managed as the vault's object store; authenticated view and download requests redirect to Drive without exposing provider credentials. Processing may add extracted text, OCR, and suggestions while preserving the original bytes.
 
 ## Capabilities and Constraints
 

@@ -459,7 +459,7 @@ textarea:focus-visible,
   margin: 30px 10px 19px;
 }
 
-.vault-rail__note {
+.vault-storage-card {
   background: rgba(255, 253, 244, 0.96);
   border: 1px solid rgba(49, 94, 157, 0.18);
   border-radius: 3px;
@@ -467,38 +467,51 @@ textarea:focus-visible,
   padding: 14px;
 }
 
-.vault-rail__note strong {
+.vault-storage-card strong {
   color: var(--vault-ink);
   display: block;
   font-family: "Newsreader Variable", Georgia, serif;
   font-size: 17px;
   font-weight: 600;
-  margin-bottom: 5px;
+  margin-bottom: 7px;
 }
 
-.vault-rail__note p {
+.vault-storage-card p {
   color: var(--vault-ink-soft);
   font-size: 11px;
   line-height: 1.45;
   margin: 0;
 }
 
-.vault-rail__note span {
-  align-items: center;
-  color: var(--vault-ink-soft);
-  display: flex;
-  font-size: 10px;
-  gap: 6px;
-  margin-top: 12px;
+.vault-storage-card__status {
+  min-height: 32px;
 }
 
-.vault-rail__note span::before {
-  background: var(--vault-green);
-  border-radius: 50%;
-  box-shadow: 0 0 0 3px rgba(113, 140, 109, 0.18);
-  content: "";
-  height: 6px;
-  width: 6px;
+.vault-storage-card__summary {
+  font-variant-numeric: tabular-nums;
+}
+
+.vault-storage-card__track {
+  background: var(--vault-paper-blue);
+  border: 1px solid var(--vault-line);
+  border-radius: 3px;
+  height: 8px;
+  margin-top: 11px;
+  overflow: hidden;
+}
+
+.vault-storage-card__track span {
+  background: var(--vault-indigo);
+  display: block;
+  height: 100%;
+}
+
+.vault-storage-card__remaining {
+  color: var(--vault-ink-soft);
+  display: block;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 7px;
 }
 
 .vault-main {

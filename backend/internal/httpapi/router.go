@@ -122,6 +122,8 @@ type Options struct {
 	OIDC OIDCService
 	// Vault enables authenticated document and tag routes when configured.
 	Vault VaultService
+	// StorageUsage reports capacity for the configured object-store account.
+	StorageUsage storage.UsageReader
 	// SecureCookies restricts session cookies to HTTPS.
 	SecureCookies bool
 	// Audit records security-sensitive successes and authorization rejections.
@@ -161,7 +163,31 @@ func NewRouter(options ...Options) http.Handler {
 	if opts.Vault != nil {
 		registerVaultRoutes(mux, opts.Identity, opts.Vault, opts.Audit)
 	}
+	if opts.StorageUsage != nil {
+		registerStorageUsageRoute(mux, opts)
+	}
 	return mux
+}
+
+func registerStorageUsageRoute(mux *http.ServeMux, opts Options) {
+	mux.Handle(
+		"GET /api/v1/storage/usage",
+		requireMember(
+			opts.Identity,
+			opts.Audit,
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				usage, err := opts.StorageUsage.Usage(r.Context())
+				if err != nil {
+					if logger := requestLoggerFromContext(r.Context()); logger != nil {
+						logger.Printf("storage usage request failed error=%v", err)
+					}
+					writeError(w, http.StatusServiceUnavailable, "storage_usage_unavailable")
+					return
+				}
+				writeJSON(w, http.StatusOK, usage)
+			}),
+		),
+	)
 }
 
 func registerOIDCRoutes(mux *http.ServeMux, opts Options) {

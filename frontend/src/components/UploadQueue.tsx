@@ -25,6 +25,7 @@ export function UploadQueue({
   useEffect(() => {
     if (!file) return;
     let active = true;
+    let completionTimer: number | undefined;
     const upload = async () => {
       setFailed(false);
       setProgress(null);
@@ -35,8 +36,9 @@ export function UploadQueue({
           {
             onProgress: (state) => {
               if (!active) return;
-              if (state.state === "complete") setProgress(100);
-              else if (state.percent !== null) setProgress(state.percent);
+              setProgress(state.percent);
+              if (state.state === "processing") setStatus("Finalizing in vault…");
+              else if (state.state === "uploading") setStatus("Uploading original…");
             },
           },
           `aether-${file.name}-${file.size}-${file.lastModified}`,
@@ -44,9 +46,15 @@ export function UploadQueue({
         if (!active) return;
         setProgress(100);
         setStatus("Upload complete");
-        onComplete(result.data, index === files.length - 1);
-        if (index < files.length - 1)
+        if (index === files.length - 1) {
+          completionTimer = window.setTimeout(
+            () => onComplete(result.data, true),
+            650,
+          );
+        } else {
+          onComplete(result.data, false);
           setIndex((current) => current + 1);
+        }
       } catch (error) {
         if (!active) return;
         setFailed(true);
@@ -56,6 +64,7 @@ export function UploadQueue({
     void upload();
     return () => {
       active = false;
+      if (completionTimer !== undefined) window.clearTimeout(completionTimer);
     };
   }, [attempt, file, files.length, index, onComplete]);
   if (!file) return null;
@@ -102,8 +111,7 @@ export function UploadQueue({
                 className="vault-upload-progress__fill"
                 style={
                   {
-                    "--vault-progress":
-                      progress === null ? 0.55 : progress / 100,
+                    "--vault-progress": progress === null ? 0 : progress / 100,
                   } as CSSProperties
                 }
               />

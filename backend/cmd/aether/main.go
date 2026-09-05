@@ -82,6 +82,7 @@ func main() {
 			SecureCookies: settings.SecureCookies,
 			Audit:         auditRecorder,
 		})
+		go vault.RunDeletionLoop(ctx, vaultService, time.Second, 20, logger)
 		go vault.RunPurgeLoop(ctx, vaultService, time.Hour, 100, logger)
 	}
 	router = httpapi.Secure(router, httpapi.SecurityOptions{

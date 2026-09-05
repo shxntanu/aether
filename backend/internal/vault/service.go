@@ -303,6 +303,41 @@ func (s *Service) List(
 	return records, nil
 }
 
+// ListDeleted returns soft-deleted documents and their tags for Trash views.
+func (s *Service) ListDeleted(
+	ctx context.Context,
+	tags []string,
+	match domain.TagMatch,
+) ([]DocumentRecord, error) {
+	if match == "" {
+		match = domain.TagMatchAll
+	}
+	if match != domain.TagMatchAll && match != domain.TagMatchAny {
+		return nil, ErrInvalidMetadata
+	}
+	normalized, err := normalizeTagFilters(tags)
+	if err != nil {
+		return nil, err
+	}
+	documents, err := s.repository.ListDocuments(ctx, domain.DocumentListOptions{
+		NormalizedTags: normalized,
+		TagMatch:       match,
+		Statuses:       []domain.DocumentStatus{domain.DocumentStatusDeleted},
+	})
+	if err != nil {
+		return nil, err
+	}
+	records := make([]DocumentRecord, 0, len(documents))
+	for _, document := range documents {
+		record, recordErr := s.deletedRecord(ctx, document)
+		if recordErr != nil {
+			return nil, recordErr
+		}
+		records = append(records, record)
+	}
+	return records, nil
+}
+
 // UpdateMetadata changes title and tags if the supplied version is current.
 func (s *Service) UpdateMetadata(
 	ctx context.Context,
@@ -508,9 +543,10 @@ func (s *Service) DeleteByActor(
 	ctx context.Context,
 	id domain.DocumentID,
 	actorID domain.MemberID,
-) error {
-	if err := s.Delete(ctx, id); err != nil {
-		return err
+) (DocumentRecord, error) {
+	record, err := s.Delete(ctx, id)
+	if err != nil {
+		return DocumentRecord{}, err
 	}
 	if err := s.recordDocumentEvent(
 		ctx,
@@ -518,9 +554,9 @@ func (s *Service) DeleteByActor(
 		id,
 		memberIDPointer(actorID),
 	); err != nil {
-		return fmt.Errorf("record document deletion: %w", err)
+		return DocumentRecord{}, fmt.Errorf("record document deletion: %w", err)
 	}
-	return nil
+	return record, nil
 }
 
 // RestoreByActor restores a document and records the successful operation.

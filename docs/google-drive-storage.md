@@ -100,3 +100,11 @@ deployment secret, and restart Aether. To revoke access, remove the secret
 and revoke Aether under the vault-owner's Google Account security settings.
 Existing Drive objects remain in the app-managed folder but are inaccessible
 until a valid owner token is configured again.
+
+## Asynchronous trashing
+
+Moving a document to Trash does not wait for Google Drive. The API persists the
+soft-deleted catalog state and returns it immediately, then a bounded worker
+sets the Drive `trashed` flag for the original and manifest. Pending and failed
+work survives process restarts and is retried; restore and permanent purge are
+blocked until `deletionStatus` is `complete`.

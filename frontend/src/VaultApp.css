@@ -1454,6 +1454,12 @@ textarea:focus-visible,
   width: 100%;
 }
 
+.vault-upload-progress.is-indeterminate .vault-upload-progress__fill {
+  left: -34%;
+  transform: none;
+  width: 34%;
+}
+
 .vault-upload-progress__label {
   background: var(--vault-ink);
   border-radius: 2px;
@@ -2093,7 +2099,11 @@ textarea:focus-visible,
   }
 
   .vault-upload-progress.is-indeterminate .vault-upload-progress__fill {
-    animation: wave-drift 2600ms linear infinite;
+    animation: upload-drift 1600ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  .vault-spin {
+    animation: vault-spin 900ms linear infinite;
   }
 }
 
@@ -2120,12 +2130,18 @@ textarea:focus-visible,
   }
 }
 
-@keyframes wave-drift {
+@keyframes upload-drift {
   from {
-    background-position: 0 100%;
+    left: -34%;
   }
 
   to {
-    background-position: 118px 100%;
+    left: 100%;
+  }
+}
+
+@keyframes vault-spin {
+  to {
+    transform: rotate(360deg);
   }
 }

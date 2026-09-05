@@ -1,4 +1,4 @@
-import { CircleAlert, Download, Trash2, X } from "lucide-react";
+import { CircleAlert, Download, LoaderCircle, Trash2, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import type { DocumentItem } from "@/lib/vault";
@@ -35,6 +35,7 @@ export function Inspector({
   const [tags, setTags] = useState(item.tags.map((tag) => tag.displayName));
   const [newTag, setNewTag] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -54,6 +55,16 @@ export function Inspector({
       setMessage(getErrorMessage(error));
     } finally {
       setSaving(false);
+    }
+  };
+  const remove = async () => {
+    setDeleting(true);
+    setMessage("");
+    try {
+      await onDelete();
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+      setDeleting(false);
     }
   };
   return (
@@ -88,12 +99,12 @@ export function Inspector({
             className="vault-inspector__body"
             onSubmit={(event) => void submit(event)}
           >
-        <Preview item={item} />
-        <h3 className="vault-inspector__title">{item.document.title}</h3>
-        <p className="vault-inspector__filename">
-          {item.document.originalFilename}
-        </p>
-        <dl className="vault-facts">
+            <Preview item={item} />
+            <h3 className="vault-inspector__title">{item.document.title}</h3>
+            <p className="vault-inspector__filename">
+              {item.document.originalFilename}
+            </p>
+            <dl className="vault-facts">
           <div className="vault-fact">
             <dt>Format</dt>
             <dd>{item.document.mediaType}</dd>
@@ -116,8 +127,8 @@ export function Inspector({
               <Status status={item.document.status} />
             </dd>
           </div>
-        </dl>
-        <section className="vault-inspector__section">
+            </dl>
+            <section className="vault-inspector__section">
           <h3>Catalog metadata</h3>
           <label className="vault-toolbar__label" htmlFor="inspector-title">
             Display title
@@ -163,13 +174,13 @@ export function Inspector({
               }}
             />
           </div>
-        </section>
-        {message && (
-          <div className="vault-notice" role="status">
-            <CircleAlert size={14} aria-hidden="true" /> {message}
-          </div>
-        )}
-        <div className="vault-inspector__actions">
+            </section>
+            {message && (
+              <div className="vault-notice" role="status">
+                <CircleAlert size={14} aria-hidden="true" /> {message}
+              </div>
+            )}
+            <div className="vault-inspector__actions">
           <Button
             variant="outline"
             className="vault-button vault-button--quiet"
@@ -186,18 +197,24 @@ export function Inspector({
           >
             {saving ? "Saving…" : "Save changes"}
           </Button>
-        </div>
+            </div>
           </form>
         </ScrollArea>
         <div className="vault-inspector__footer">
-        <Button
-          variant="destructive"
-          className="vault-button vault-button--danger"
-          type="button"
-          onClick={() => void onDelete()}
-        >
-          <Trash2 size={14} aria-hidden="true" /> Move to Trash
-        </Button>
+          <Button
+            variant="destructive"
+            className="vault-button vault-button--danger"
+            type="button"
+            disabled={deleting}
+            onClick={() => void remove()}
+          >
+            {deleting ? (
+              <LoaderCircle className="vault-spin" size={14} aria-hidden="true" />
+            ) : (
+              <Trash2 size={14} aria-hidden="true" />
+            )}
+            {deleting ? "Moving to Trash…" : "Move to Trash"}
+          </Button>
         </div>
       </SheetContent>
     </Sheet>

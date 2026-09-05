@@ -52,13 +52,28 @@ export default function VaultApp() {
   const loadDocuments = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await api.listDocuments();
-      setDocuments(result.data.documents);
+      const [ready, deleted] = await Promise.all([
+        api.listDocuments({ status: "ready" }),
+        api.listDocuments({ status: "deleted" }),
+      ]);
+      setDocuments([...ready.data.documents, ...deleted.data.documents]);
       setError("");
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const refreshDeletedDocuments = useCallback(async () => {
+    try {
+      const result = await api.listDocuments({ status: "deleted" });
+      setDocuments((current) => [
+        ...current.filter((item) => item.document.status !== "deleted"),
+        ...result.data.documents,
+      ]);
+    } catch (requestError) {
+      setError(getErrorMessage(requestError));
     }
   }, []);
 
@@ -124,50 +139,57 @@ export default function VaultApp() {
   const selected =
     documents.find((item) => item.document.id === selectedId) ?? null;
 
+  useEffect(() => {
+    const hasPendingDeletion = documents.some(
+      (item) =>
+        item.document.status === "deleted" &&
+        item.document.deletionStatus !== "complete",
+    );
+    if (!hasPendingDeletion) return;
+    const timer = window.setInterval(() => void refreshDeletedDocuments(), 1500);
+    return () => window.clearInterval(timer);
+  }, [documents, refreshDeletedDocuments]);
+
   const updateMetadata = async (title: string, nextTags: string[]) => {
     if (!selected) return;
-    try {
-      const result = await api.updateMetadata(selected.document.id, {
-        title,
-        tags: nextTags,
-        version: selected.document.version,
-      });
-      const updated: DocumentItem = result.data;
-      setDocuments((current) =>
-        current.map((item) =>
-          item.document.id === selected.document.id ? updated : item,
-        ),
-      );
-    } catch (requestError) {
-      throw new Error(getErrorMessage(requestError));
-    }
+    const result = await api.updateMetadata(selected.document.id, {
+      title,
+      tags: nextTags,
+      version: selected.document.version,
+    });
+    const updated: DocumentItem = result.data;
+    setDocuments((current) =>
+      current.map((item) =>
+        item.document.id === selected.document.id ? updated : item,
+      ),
+    );
   };
 
   const deleteSelected = async () => {
     if (!selected) return;
-    await api.deleteDocument(selected.document.id);
+    const result = await api.deleteDocument(selected.document.id);
     setDocuments((current) =>
       current.map((item) =>
         item.document.id === selected.document.id
-          ? { ...item, document: { ...item.document, status: "deleted" } }
+          ? result.data
           : item,
       ),
     );
     setSelectedId(null);
+    navigate("/library");
   };
 
   const restoreDocument = async (id: string) => {
     try {
-      await api.restoreDocument(id);
+      const result = await api.restoreDocument(id);
       setDocuments((current) =>
         current.map((item) =>
-          item.document.id === id
-            ? { ...item, document: { ...item.document, status: "ready" } }
-            : item,
+          item.document.id === id ? result.data : item,
         ),
       );
     } catch (requestError) {
       setError(getErrorMessage(requestError));
+      throw requestError;
     }
   };
 
@@ -179,6 +201,7 @@ export default function VaultApp() {
       );
     } catch (requestError) {
       setError(getErrorMessage(requestError));
+      throw requestError;
     }
   };
 
@@ -294,6 +317,7 @@ export default function VaultApp() {
           {route === "trash" && (
             <TrashPage
               documents={documents}
+              canManage={session.member.role === "admin"}
               onRestore={restoreDocument}
               onPurge={purgeDocument}
             />

@@ -22,6 +22,8 @@ type documentModel struct {
 	UpdatedAt        time.Time             `gorm:"column:updated_at"`
 	DeletedAt        *time.Time            `gorm:"column:deleted_at"`
 	PurgeAfter       *time.Time            `gorm:"column:purge_after"`
+	DeletionStatus   domain.DeletionStatus `gorm:"column:deletion_status"`
+	DeletionError    string                `gorm:"column:deletion_error"`
 	ManifestError    string                `gorm:"column:manifest_error"`
 }
 
@@ -114,6 +116,8 @@ func documentModelFromDomain(document domain.Document) documentModel {
 		UpdatedAt:        document.UpdatedAt,
 		DeletedAt:        document.DeletedAt,
 		PurgeAfter:       document.PurgeAfter,
+		DeletionStatus:   document.DeletionStatus,
+		DeletionError:    document.DeletionError,
 		ManifestError:    document.ManifestError,
 	}
 }
@@ -135,6 +139,8 @@ func (document documentModel) domain() domain.Document {
 		UpdatedAt:        document.UpdatedAt,
 		DeletedAt:        document.DeletedAt,
 		PurgeAfter:       document.PurgeAfter,
+		DeletionStatus:   document.DeletionStatus,
+		DeletionError:    document.DeletionError,
 		ManifestError:    document.ManifestError,
 	}
 }

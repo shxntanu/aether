@@ -51,6 +51,8 @@ func (s *Store) UpdateDocument(
 		"updated_at":        document.UpdatedAt,
 		"deleted_at":        document.DeletedAt,
 		"purge_after":       document.PurgeAfter,
+		"deletion_status":   document.DeletionStatus,
+		"deletion_error":    document.DeletionError,
 		"manifest_error":    document.ManifestError,
 		"version":           gorm.Expr("version + ?", 1),
 	}

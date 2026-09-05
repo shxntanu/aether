@@ -1,6 +1,7 @@
 type MemberRole = "member" | "admin";
 type MemberStatus = "active" | "disabled";
 type DocumentStatus = "uploading" | "ready" | "failed" | "deleted";
+type DeletionStatus = "queued" | "processing" | "complete" | "failed";
 type IndexStatus =
   | "not_scheduled"
   | "queued"
@@ -15,6 +16,7 @@ type KnownApiErrorCode =
   | "catalog_error"
   | "csrf_required"
   | "document_too_large"
+  | "deletion_in_progress"
   | "file_required"
   | "idempotency_key_required"
   | "invalid_login"
@@ -110,6 +112,8 @@ export type Document = {
   deletedAt?: string;
   /** purgeAfter is the earliest permanent-deletion timestamp when applicable. */
   purgeAfter?: string;
+  /** deletionStatus reports asynchronous object-storage trashing progress. */
+  deletionStatus?: DeletionStatus;
   /** manifestError reports a failed manifest synchronization for repair. */
   manifestError?: string;
 };
@@ -158,13 +162,13 @@ export class ApiError extends Error {
 /** UploadResult is the typed success response returned after a multipart upload. */
 export type UploadResult = ApiResponse<DocumentRecord>;
 
-/** UploadState describes deterministic upload phases exposed by fetch-based uploads. */
+/** UploadState describes measured transfer and server-finalization phases. */
 export type UploadState = {
   /** state describes the deterministic phase visible to callers. */
-  state: "uploading" | "complete" | "failed";
-  /** loaded is null while the browser transfer amount is unavailable. */
+  state: "uploading" | "processing" | "complete" | "failed";
+  /** loaded is the measured request bytes, or null when unavailable. */
   loaded: number | null;
-  /** total is the selected file size when available. */
+  /** total is the browser-reported multipart request size when available. */
   total: number | null;
   /** percent is null for indeterminate upload progress. */
   percent: number | null;
@@ -176,6 +180,7 @@ const knownApiErrorCodes: ReadonlySet<string> = new Set<KnownApiErrorCode>([
   "authentication_required",
   "catalog_error",
   "csrf_required",
+  "deletion_in_progress",
   "document_too_large",
   "file_required",
   "idempotency_key_required",
@@ -226,10 +231,11 @@ export const api = {
     }
   },
 
-  /** listDocuments returns ready documents filtered by supported tag options. */
+  /** listDocuments returns documents filtered by supported status and tag options. */
   listDocuments(options?: {
     tags?: string[];
     match?: "all" | "any";
+    status?: "ready" | "deleted";
   }): Promise<ApiResponse<{ documents: DocumentRecord[] }>> {
     const params = new URLSearchParams();
     for (const tag of options?.tags ?? []) {
@@ -237,6 +243,7 @@ export const api = {
       if (trimmedTag !== "") params.append("tag", trimmedTag);
     }
     if (params.has("tag") && options?.match) params.set("match", options.match);
+    if (options?.status) params.set("status", options.status);
     return request(`/documents${querySuffix(params)}`);
   },
 
@@ -257,8 +264,8 @@ export const api = {
     });
   },
 
-  /** deleteDocument soft-deletes one document and preserves the empty response status. */
-  deleteDocument(id: string): Promise<ApiResponse<null>> {
+  /** deleteDocument queues storage trashing and returns the current server record. */
+  deleteDocument(id: string): Promise<ApiResponse<DocumentRecord>> {
     return request(`/documents/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
@@ -300,18 +307,8 @@ export const api = {
     if (metadata.title !== undefined) body.append("title", metadata.title);
     for (const tag of metadata.tags ?? []) body.append("tags", tag);
 
-    metadata.onProgress?.({
-      state: "uploading",
-      loaded: null,
-      total: file.size,
-      percent: null,
-    });
     try {
-      const response = await request<DocumentRecord>("/documents", {
-        method: "POST",
-        headers: { "Idempotency-Key": idempotencyKey },
-        body,
-      });
+      const response = await uploadRequest(body, metadata.onProgress, idempotencyKey);
       metadata.onProgress?.({
         state: "complete",
         loaded: file.size,
@@ -414,6 +411,66 @@ async function request<T>(
     headers: response.headers,
     data: response.status === emptyResponse ? (null as T) : (body as T),
   };
+}
+
+function uploadRequest(
+  body: FormData,
+  onProgress: ((state: UploadState) => void) | undefined,
+  idempotencyKey: string,
+): Promise<UploadResult> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${apiBase}/documents`);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("Idempotency-Key", idempotencyKey);
+    if (csrfToken) xhr.setRequestHeader("X-CSRF-Token", csrfToken);
+
+    onProgress?.({ state: "uploading", loaded: 0, total: null, percent: null });
+    xhr.upload.onprogress = (event) => {
+      const measurable = event.lengthComputable && event.total > 0;
+      onProgress?.({
+        state: "uploading",
+        loaded: event.loaded,
+        total: measurable ? event.total : null,
+        percent: measurable
+          ? Math.min(100, Math.round((event.loaded / event.total) * 100))
+          : null,
+      });
+    };
+    xhr.upload.onload = () => {
+      onProgress?.({ state: "processing", loaded: null, total: null, percent: 100 });
+    };
+    xhr.onerror = () => reject(new ApiError(0, "network_error", "The request could not be sent."));
+    xhr.onabort = () => reject(new ApiError(0, "network_error", "The upload was canceled."));
+    xhr.onload = () => {
+      const headers = responseHeaders(xhr.getAllResponseHeaders());
+      const response = new Response(xhr.responseText, { status: xhr.status, headers });
+      void parseBody(response)
+        .then((parsed) => {
+          if (xhr.status < 200 || xhr.status >= 300) {
+            reject(apiErrorFromResponse(response, parsed));
+            return;
+          }
+          resolve({
+            status: xhr.status,
+            headers,
+            data: parsed as DocumentRecord,
+          });
+        })
+        .catch(reject);
+    };
+    xhr.send(body);
+  });
+}
+
+function responseHeaders(rawHeaders: string): Headers {
+  const headers = new Headers();
+  for (const line of rawHeaders.trim().split(/[\r\n]+/)) {
+    if (line === "") continue;
+    const separator = line.indexOf(":");
+    if (separator > 0) headers.append(line.slice(0, separator), line.slice(separator + 1).trim());
+  }
+  return headers;
 }
 
 async function parseBody(response: Response): Promise<unknown> {

@@ -74,4 +74,7 @@ func TestDocumentSoftDeleteSetsRetentionDeadline(t *testing.T) {
 	if document.PurgeAfter == nil || !document.PurgeAfter.Equal(wantPurgeAfter) {
 		t.Fatalf("PurgeAfter = %v, want %s", document.PurgeAfter, wantPurgeAfter)
 	}
+	if document.DeletionStatus != DeletionStatusQueued {
+		t.Fatalf("DeletionStatus = %q, want %q", document.DeletionStatus, DeletionStatusQueued)
+	}
 }

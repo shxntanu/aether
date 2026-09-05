@@ -106,8 +106,8 @@ type VaultService interface {
 		domain.DocumentID,
 		*storage.ByteRange,
 	) (vault.Content, error)
-	// Delete soft-deletes a ready document and is idempotent for deleted rows.
-	Delete(context.Context, domain.DocumentID) error
+	// Delete queues a soft deletion and returns its complete current record.
+	Delete(context.Context, domain.DocumentID) (vault.DocumentRecord, error)
 	// Restore returns a deleted document to ready state.
 	Restore(context.Context, domain.DocumentID) (vault.DocumentRecord, error)
 	// Purge permanently removes a deleted document under the supplied policy.

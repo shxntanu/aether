@@ -13,15 +13,27 @@ import (
 const (
 	// DeletionRetention is the mandatory recovery window for soft-deleted
 	// documents before permanent purge is allowed.
-	DeletionRetention = 30 * 24 * time.Hour
-	maxPurgeBatch     = 100
+	DeletionRetention  = 30 * 24 * time.Hour
+	maxPurgeBatch      = 100
+	deletionRetryDelay = 30 * time.Second
 )
 
 var (
 	// ErrRetentionActive indicates that a document cannot yet be permanently
 	// removed because its recovery window has not expired.
 	ErrRetentionActive = errors.New("document retention is still active")
+	// ErrDeletionInProgress indicates that storage trashing must finish before
+	// the document can be restored or permanently purged.
+	ErrDeletionInProgress = errors.New("document deletion is still in progress")
 )
+
+// DeletionResult reports one bounded asynchronous storage-trash pass.
+type DeletionResult struct {
+	// Completed contains IDs whose original and manifest are now trashed.
+	Completed []domain.DocumentID
+	// Failed maps each attempted document ID to its retryable storage error.
+	Failed map[domain.DocumentID]error
+}
 
 // PurgePolicy selects whether Purge must enforce the document's retention
 // timestamp or may rely on a prior due-date selection.
@@ -44,33 +56,29 @@ type PurgeResult struct {
 	Failed map[domain.DocumentID]error
 }
 
-// Delete soft-deletes a ready document after trashing its original and
-// manifest. A repeated delete of an already deleted document succeeds.
-func (s *Service) Delete(ctx context.Context, id domain.DocumentID) error {
+// Delete immediately soft-deletes a ready document and queues its storage
+// objects for asynchronous trashing. Repeated deletion returns the current row.
+func (s *Service) Delete(ctx context.Context, id domain.DocumentID) (DocumentRecord, error) {
 	document, err := s.repository.GetDocument(ctx, id)
 	if err != nil {
-		return err
+		return DocumentRecord{}, err
 	}
 	if document.Status == domain.DocumentStatusDeleted {
-		return nil
+		return s.deletedRecord(ctx, document)
 	}
 	if document.Status != domain.DocumentStatusReady {
-		return fmt.Errorf("delete document %q: %w", id, domain.ErrNotFound)
-	}
-
-	trashed, err := s.trashDocumentObjects(ctx, document.StorageKey)
-	if err != nil {
-		return fmt.Errorf("delete document %q: %w", id, err)
+		return DocumentRecord{}, fmt.Errorf("delete document %q: %w", id, domain.ErrNotFound)
 	}
 
 	now := s.now().UTC()
 	if err := document.SoftDelete(now, DeletionRetention); err != nil {
-		return s.compensateTrash(ctx, id, trashed, err)
+		return DocumentRecord{}, fmt.Errorf("delete document %q: %w", id, err)
 	}
-	if _, err := s.repository.UpdateDocument(ctx, document, document.Version); err != nil {
-		return s.compensateTrash(ctx, id, trashed, err)
+	updated, err := s.repository.UpdateDocument(ctx, document, document.Version)
+	if err != nil {
+		return DocumentRecord{}, fmt.Errorf("delete document %q: %w", id, err)
 	}
-	return nil
+	return s.deletedRecord(ctx, updated)
 }
 
 // Restore returns a deleted document to ready state, preserving its metadata
@@ -82,6 +90,9 @@ func (s *Service) Restore(ctx context.Context, id domain.DocumentID) (DocumentRe
 	}
 	if document.Status != domain.DocumentStatusDeleted {
 		return DocumentRecord{}, fmt.Errorf("restore document %q: %w", id, domain.ErrConflict)
+	}
+	if document.DeletionStatus != domain.DeletionStatusComplete {
+		return DocumentRecord{}, fmt.Errorf("restore document %q: %w", id, ErrDeletionInProgress)
 	}
 
 	restored, err := s.restoreDocumentObjects(ctx, document.StorageKey)
@@ -120,6 +131,9 @@ func (s *Service) Purge(
 	if document.Status != domain.DocumentStatusDeleted {
 		return fmt.Errorf("purge document %q: %w", id, domain.ErrConflict)
 	}
+	if document.DeletionStatus != domain.DeletionStatusComplete {
+		return fmt.Errorf("purge document %q: %w", id, ErrDeletionInProgress)
+	}
 	if policy != EnforceRetention && policy != RetentionAlreadyChecked {
 		return fmt.Errorf("purge document %q: invalid purge policy", id)
 	}
@@ -137,6 +151,85 @@ func (s *Service) Purge(
 		return fmt.Errorf("purge document %q: %w", id, err)
 	}
 	return nil
+}
+
+// ProcessDeletions trashes storage objects for at most batchSize queued or
+// retryable deleted documents and persists visible progress for each attempt.
+func (s *Service) ProcessDeletions(ctx context.Context, batchSize int) (DeletionResult, error) {
+	if batchSize < 1 {
+		batchSize = 1
+	}
+	if batchSize > maxPurgeBatch {
+		batchSize = maxPurgeBatch
+	}
+	documents, err := s.repository.ListDocuments(ctx, domain.DocumentListOptions{
+		Statuses: []domain.DocumentStatus{domain.DocumentStatusDeleted},
+	})
+	if err != nil {
+		return DeletionResult{}, fmt.Errorf("list pending deletions: %w", err)
+	}
+
+	result := DeletionResult{
+		Completed: make([]domain.DocumentID, 0, batchSize),
+		Failed:    make(map[domain.DocumentID]error),
+	}
+	now := s.now().UTC()
+	for _, document := range documents {
+		if len(result.Completed)+len(result.Failed) >= batchSize {
+			break
+		}
+		if document.DeletionStatus == domain.DeletionStatusComplete {
+			continue
+		}
+		if document.DeletionStatus != domain.DeletionStatusQueued &&
+			now.Sub(document.UpdatedAt) < deletionRetryDelay {
+			continue
+		}
+		if err := s.processDeletion(ctx, document); err != nil {
+			result.Failed[document.ID] = err
+			continue
+		}
+		result.Completed = append(result.Completed, document.ID)
+	}
+	return result, nil
+}
+
+func (s *Service) processDeletion(ctx context.Context, document domain.Document) error {
+	document.DeletionStatus = domain.DeletionStatusProcessing
+	document.DeletionError = ""
+	document.UpdatedAt = s.now().UTC()
+	processing, err := s.repository.UpdateDocument(ctx, document, document.Version)
+	if err != nil {
+		return fmt.Errorf("claim deletion %q: %w", document.ID, err)
+	}
+
+	_, trashErr := s.trashDocumentObjects(ctx, processing.StorageKey)
+	processing.UpdatedAt = s.now().UTC()
+	if trashErr == nil {
+		processing.DeletionStatus = domain.DeletionStatusComplete
+		processing.DeletionError = ""
+	} else {
+		processing.DeletionStatus = domain.DeletionStatusFailed
+		processing.DeletionError = trashErr.Error()
+	}
+	if _, err := s.repository.UpdateDocument(ctx, processing, processing.Version); err != nil {
+		return errors.Join(trashErr, fmt.Errorf("persist deletion progress: %w", err))
+	}
+	if trashErr != nil {
+		return fmt.Errorf("trash document %q: %w", document.ID, trashErr)
+	}
+	return nil
+}
+
+func (s *Service) deletedRecord(
+	ctx context.Context,
+	document domain.Document,
+) (DocumentRecord, error) {
+	tags, err := s.repository.ListDocumentTags(ctx, document.ID)
+	if err != nil {
+		return DocumentRecord{}, err
+	}
+	return DocumentRecord{Document: document, Tags: tags}, nil
 }
 
 // PurgeDue permanently purges at most 100 due deleted documents. It attempts

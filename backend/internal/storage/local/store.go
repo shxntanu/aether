@@ -153,9 +153,23 @@ func (s *Store) Stat(_ context.Context, key string) (storage.ObjectInfo, error) 
 	}, nil
 }
 
-// Trash moves an available object into the store's private trash tree.
+// Trash moves an available object into the store's private trash tree. It is
+// idempotent when a prior worker attempt already moved the object.
 func (s *Store) Trash(_ context.Context, key string) error {
-	return s.move(key, false, true)
+	err := s.move(key, false, true)
+	if !errors.Is(err, storage.ErrNotFound) {
+		return err
+	}
+	path, pathErr := s.path(key, true)
+	if pathErr != nil {
+		return pathErr
+	}
+	if _, statErr := os.Stat(path); statErr == nil {
+		return nil
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return fmt.Errorf("inspect trashed object: %w", statErr)
+	}
+	return err
 }
 
 // Restore moves a trashed object back to its original key.

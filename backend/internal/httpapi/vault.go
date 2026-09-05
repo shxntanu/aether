@@ -20,7 +20,11 @@ import (
 const multipartOverhead int64 = 1024 * 1024
 
 type actorVaultService interface {
-	DeleteByActor(context.Context, domain.DocumentID, domain.MemberID) error
+	DeleteByActor(
+		context.Context,
+		domain.DocumentID,
+		domain.MemberID,
+	) (vault.DocumentRecord, error)
 	RestoreByActor(
 		context.Context,
 		domain.DocumentID,
@@ -38,6 +42,14 @@ type actorVaultService interface {
 		*storage.ByteRange,
 		domain.MemberID,
 	) (vault.Content, error)
+}
+
+type deletedVaultService interface {
+	ListDeleted(
+		context.Context,
+		[]string,
+		domain.TagMatch,
+	) ([]vault.DocumentRecord, error)
 }
 
 type actorVaultLinkService interface {
@@ -122,21 +134,22 @@ func registerVaultRoutes(
 
 func handleDocumentDelete(w http.ResponseWriter, r *http.Request, service VaultService) {
 	documentID := domain.DocumentID(r.PathValue("id"))
+	var record vault.DocumentRecord
 	var err error
 	if actorService, ok := service.(actorVaultService); ok {
-		err = actorService.DeleteByActor(
+		record, err = actorService.DeleteByActor(
 			r.Context(),
 			documentID,
 			memberFromContext(r.Context()).ID,
 		)
 	} else {
-		err = service.Delete(r.Context(), documentID)
+		record, err = service.Delete(r.Context(), documentID)
 	}
 	if err != nil {
 		writeVaultError(w, r, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeRecord(w, http.StatusAccepted, record)
 }
 
 func handleDocumentRestore(w http.ResponseWriter, r *http.Request, service VaultService) {
@@ -220,11 +233,31 @@ func handleDocumentUpload(w http.ResponseWriter, r *http.Request, service VaultS
 }
 
 func handleDocumentList(w http.ResponseWriter, r *http.Request, service VaultService) {
-	records, err := service.List(
-		r.Context(),
-		r.URL.Query()["tag"],
-		domain.TagMatch(r.URL.Query().Get("match")),
-	)
+	statusValues := r.URL.Query()["status"]
+	if len(statusValues) > 1 {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	status := r.URL.Query().Get("status")
+	if status != "" && status != string(domain.DocumentStatusReady) &&
+		status != string(domain.DocumentStatusDeleted) {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	tags := r.URL.Query()["tag"]
+	match := domain.TagMatch(r.URL.Query().Get("match"))
+	var records []vault.DocumentRecord
+	var err error
+	if status == string(domain.DocumentStatusDeleted) {
+		deletedService, ok := service.(deletedVaultService)
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		records, err = deletedService.ListDeleted(r.Context(), tags, match)
+	} else {
+		records, err = service.List(r.Context(), tags, match)
+	}
 	if err != nil {
 		writeVaultError(w, r, err)
 		return
@@ -400,6 +433,8 @@ func writeVaultError(w http.ResponseWriter, r *http.Request, err error) {
 		status, code = http.StatusConflict, "upload_in_progress"
 	case errors.Is(err, vault.ErrRetentionActive):
 		status, code = http.StatusConflict, "retention_active"
+	case errors.Is(err, vault.ErrDeletionInProgress):
+		status, code = http.StatusConflict, "deletion_in_progress"
 	}
 	if status >= http.StatusInternalServerError {
 		if logger := requestLoggerFromContext(r.Context()); logger != nil {

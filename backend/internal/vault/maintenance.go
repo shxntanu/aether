@@ -10,9 +10,78 @@ import (
 )
 
 const (
-	defaultPurgeInterval = time.Hour
-	defaultPurgeBatch    = 100
+	defaultPurgeInterval    = time.Hour
+	defaultPurgeBatch       = 100
+	defaultDeletionInterval = time.Second
+	defaultDeletionBatch    = 20
 )
+
+// DeletionRunner performs one bounded attempt to trash queued document objects.
+type DeletionRunner interface {
+	ProcessDeletions(context.Context, int) (DeletionResult, error)
+}
+
+// RunDeletionLoop processes persisted deletion work immediately and at each
+// interval until ctx is canceled. Failed and interrupted work remains retryable.
+func RunDeletionLoop(
+	ctx context.Context,
+	runner DeletionRunner,
+	interval time.Duration,
+	batchSize int,
+	logger *log.Logger,
+) {
+	if runner == nil {
+		return
+	}
+	if interval <= 0 {
+		interval = defaultDeletionInterval
+	}
+	if batchSize <= 0 {
+		batchSize = defaultDeletionBatch
+	}
+
+	runDeletionPass(ctx, runner, batchSize, logger)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for ctx.Err() == nil {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			runDeletionPass(ctx, runner, batchSize, logger)
+		}
+	}
+}
+
+func runDeletionPass(
+	ctx context.Context,
+	runner DeletionRunner,
+	batchSize int,
+	logger *log.Logger,
+) {
+	if ctx.Err() != nil {
+		return
+	}
+	result, err := runner.ProcessDeletions(ctx, batchSize)
+	if err != nil {
+		logDeletionFailure(logger, "deletion pass", err)
+		return
+	}
+	failedIDs := make([]domain.DocumentID, 0, len(result.Failed))
+	for id := range result.Failed {
+		failedIDs = append(failedIDs, id)
+	}
+	sort.Slice(failedIDs, func(i, j int) bool { return failedIDs[i] < failedIDs[j] })
+	for _, id := range failedIDs {
+		logDeletionFailure(logger, "document "+string(id), result.Failed[id])
+	}
+}
+
+func logDeletionFailure(logger *log.Logger, target string, err error) {
+	if logger != nil {
+		logger.Printf("deletion failed target=%s error=%v", target, err)
+	}
+}
 
 // PurgeRunner performs one bounded attempt to permanently remove due
 // documents. Implementations must honor ctx and return document-scoped

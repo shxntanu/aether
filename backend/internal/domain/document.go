@@ -15,6 +15,10 @@ type MemberID string
 // DocumentStatus describes the storage lifecycle of a document.
 type DocumentStatus string
 
+// DeletionStatus describes asynchronous object-storage trashing after a
+// document has been removed from the visible library.
+type DeletionStatus string
+
 const (
 	// DocumentStatusUploading indicates that catalog creation preceded object storage.
 	DocumentStatusUploading DocumentStatus = "uploading"
@@ -24,6 +28,17 @@ const (
 	DocumentStatusFailed DocumentStatus = "failed"
 	// DocumentStatusDeleted indicates a soft-deleted document awaiting purge.
 	DocumentStatusDeleted DocumentStatus = "deleted"
+)
+
+const (
+	// DeletionStatusQueued indicates that storage trashing is waiting for a worker.
+	DeletionStatusQueued DeletionStatus = "queued"
+	// DeletionStatusProcessing indicates that a worker is trashing storage objects.
+	DeletionStatusProcessing DeletionStatus = "processing"
+	// DeletionStatusComplete indicates that all available storage objects are trashed.
+	DeletionStatusComplete DeletionStatus = "complete"
+	// DeletionStatusFailed indicates that storage trashing failed and will be retried.
+	DeletionStatusFailed DeletionStatus = "failed"
 )
 
 // IndexStatus describes the document content-processing lifecycle.
@@ -79,6 +94,11 @@ type Document struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 	// PurgeAfter is the earliest permanent-deletion time when applicable.
 	PurgeAfter *time.Time `json:"purgeAfter,omitempty"`
+	// DeletionStatus reports asynchronous object-storage trashing progress.
+	DeletionStatus DeletionStatus `json:"deletionStatus,omitempty"`
+	// DeletionError retains the latest worker diagnostic without exposing
+	// provider details through the public document response.
+	DeletionError string `json:"-"`
 	// ManifestError exposes a failed manifest synchronization for repair.
 	ManifestError string `json:"manifestError,omitempty"`
 }
@@ -144,6 +164,8 @@ func (d *Document) TransitionTo(next DocumentStatus, now time.Time) error {
 	if next == DocumentStatusReady {
 		d.DeletedAt = nil
 		d.PurgeAfter = nil
+		d.DeletionStatus = ""
+		d.DeletionError = ""
 	}
 	return nil
 }
@@ -160,5 +182,7 @@ func (d *Document) SoftDelete(now time.Time, retention time.Duration) error {
 	purgeAfter := now.Add(retention)
 	d.DeletedAt = &now
 	d.PurgeAfter = &purgeAfter
+	d.DeletionStatus = DeletionStatusQueued
+	d.DeletionError = ""
 	return nil
 }

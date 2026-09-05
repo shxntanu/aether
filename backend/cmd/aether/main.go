@@ -75,10 +75,12 @@ func main() {
 			)
 		}
 		vaultService := vault.NewService(store, objects, auditRecorder)
+		usageReader, _ := objects.(storage.UsageReader)
 		router = httpapi.NewRouter(httpapi.Options{
 			Identity:      identityService,
 			OIDC:          oidcService,
 			Vault:         vaultService,
+			StorageUsage:  usageReader,
 			SecureCookies: settings.SecureCookies,
 			Audit:         auditRecorder,
 		})

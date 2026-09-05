@@ -28,6 +28,7 @@ type KnownApiErrorCode =
   | "not_found"
   | "rate_limited"
   | "retention_active"
+  | "storage_usage_unavailable"
   | "unexpected_response"
   | "unsupported_media_type"
   | "upload_in_progress"
@@ -132,6 +133,16 @@ export type Tag = {
   normalizedName: string;
 };
 
+/** StorageUsage is the host storage account capacity reported by the backend. */
+export type StorageUsage = {
+  /** usedBytes is the account's current storage consumption. */
+  usedBytes: number;
+  /** limitBytes is null when the provider grants unlimited storage. */
+  limitBytes: number | null;
+  /** remainingBytes is null when the account has no reported storage limit. */
+  remainingBytes: number | null;
+};
+
 /** ApiError carries typed failure details for HTTP and network errors. */
 export class ApiError extends Error {
   /** status is the HTTP status, or 0 when the browser could not send the request. */
@@ -190,6 +201,7 @@ const knownApiErrorCodes: ReadonlySet<string> = new Set<KnownApiErrorCode>([
   "not_found",
   "rate_limited",
   "retention_active",
+  "storage_usage_unavailable",
   "unexpected_response",
   "unsupported_media_type",
   "upload_in_progress",
@@ -224,6 +236,11 @@ export const api = {
     } finally {
       csrfToken = null;
     }
+  },
+
+  /** getStorageUsage returns capacity for the configured host storage account. */
+  getStorageUsage(): Promise<ApiResponse<StorageUsage>> {
+    return request("/storage/usage");
   },
 
   /** listDocuments returns ready documents filtered by supported tag options. */

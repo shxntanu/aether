@@ -48,6 +48,23 @@ type ObjectLinks struct {
 	DownloadURL string
 }
 
+// Usage describes provider-reported account storage consumption. LimitBytes
+// and RemainingBytes are nil when the provider grants unlimited storage.
+type Usage struct {
+	// UsedBytes is the provider account's current storage consumption.
+	UsedBytes int64 `json:"usedBytes"`
+	// LimitBytes is the provider account's storage limit when one applies.
+	LimitBytes *int64 `json:"limitBytes"`
+	// RemainingBytes is the non-negative capacity available under LimitBytes.
+	RemainingBytes *int64 `json:"remainingBytes"`
+}
+
+// UsageReader is an optional object-store capability for account capacity.
+type UsageReader interface {
+	// Usage returns current provider-reported account storage consumption.
+	Usage(context.Context) (Usage, error)
+}
+
 // ObjectLinker is an optional object-store capability for provider-hosted links.
 type ObjectLinker interface {
 	// Links returns authenticated-provider links for an object key.

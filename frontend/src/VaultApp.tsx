@@ -1,7 +1,13 @@
 import { CircleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { api, type Member, type Session, type Tag } from "@/lib/api";
+import {
+  api,
+  type Member,
+  type Session,
+  type StorageUsage,
+  type Tag,
+} from "@/lib/api";
 import {
   getDocumentIdFromPath,
   getErrorMessage,
@@ -38,6 +44,10 @@ export default function VaultApp() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [storageUsage, setStorageUsage] = useState<StorageUsage | null>(null);
+  const [storageUsageState, setStorageUsageState] = useState<
+    "loading" | "ready" | "unavailable"
+  >("loading");
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     getDocumentIdFromPath(window.location.pathname),
   );
@@ -59,6 +69,18 @@ export default function VaultApp() {
       setError(getErrorMessage(requestError));
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const loadStorageUsage = useCallback(async () => {
+    setStorageUsageState("loading");
+    try {
+      const result = await api.getStorageUsage();
+      setStorageUsage(result.data);
+      setStorageUsageState("ready");
+    } catch {
+      setStorageUsage(null);
+      setStorageUsageState("unavailable");
     }
   }, []);
 
@@ -119,7 +141,8 @@ export default function VaultApp() {
     void refreshTags();
     void refreshMembers();
     void loadDocuments();
-  }, [loadDocuments, refreshMembers, sessionState]);
+    void loadStorageUsage();
+  }, [loadDocuments, loadStorageUsage, refreshMembers, sessionState]);
 
   const selected =
     documents.find((item) => item.document.id === selectedId) ?? null;
@@ -197,9 +220,10 @@ export default function VaultApp() {
       if (finished) {
         setUploadFiles([]);
         setUploadOpen(false);
+        void loadStorageUsage();
       }
     },
-    [],
+    [loadStorageUsage],
   );
 
   const openDocument = (id: string) => {
@@ -243,6 +267,8 @@ export default function VaultApp() {
           session={session}
           documents={documents}
           tags={tags}
+          storageUsage={storageUsage}
+          storageUsageState={storageUsageState}
           open={navOpen}
           onClose={closeNavigation}
         />
@@ -273,7 +299,10 @@ export default function VaultApp() {
               onSelect={openDocument}
               query={query}
               onUpload={() => setUploadOpen(true)}
-              onRefresh={() => void loadDocuments()}
+              onRefresh={() => {
+                void loadDocuments();
+                void loadStorageUsage();
+              }}
               loading={loading}
             />
           )}

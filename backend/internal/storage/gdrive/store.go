@@ -66,6 +66,7 @@ type oauthConfig struct {
 }
 
 var _ storage.ObjectStore = (*Store)(nil)
+var _ storage.UsageReader = (*Store)(nil)
 
 // New creates an authenticated Google Drive object store.
 func New(ctx context.Context, config Config) (*Store, error) {
@@ -155,6 +156,56 @@ func (s *Store) ExchangeCode(ctx context.Context, code string) (*oauth2.Token, e
 
 func (o oauthConfig) authURL() string {
 	return "https://accounts.google.com/o/oauth2/v2/auth"
+}
+
+// Usage returns storage consumption and capacity for the vault-owner account.
+func (s *Store) Usage(ctx context.Context) (storage.Usage, error) {
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		s.apiBaseURL+"/about",
+		nil,
+	)
+	if err != nil {
+		return storage.Usage{}, fmt.Errorf("create Drive usage request: %w", err)
+	}
+	query := request.URL.Query()
+	query.Set("fields", "storageQuota(limit,usage)")
+	request.URL.RawQuery = query.Encode()
+	response, err := s.client.Do(request)
+	if err != nil {
+		return storage.Usage{}, fmt.Errorf("read Drive usage: %w", err)
+	}
+	if response.StatusCode != http.StatusOK {
+		return storage.Usage{}, s.responseError("read Drive usage", response)
+	}
+	defer response.Body.Close()
+	var about driveAbout
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64*1024)).Decode(&about); err != nil {
+		return storage.Usage{}, fmt.Errorf("decode Drive usage: %w", err)
+	}
+	usedBytes, err := parseQuotaBytes("usage", about.StorageQuota.Usage)
+	if err != nil {
+		return storage.Usage{}, err
+	}
+	usage := storage.Usage{UsedBytes: usedBytes}
+	if about.StorageQuota.Limit == "" {
+		return usage, nil
+	}
+	limitBytes, err := parseQuotaBytes("limit", about.StorageQuota.Limit)
+	if err != nil {
+		return storage.Usage{}, err
+	}
+	if limitBytes == 0 {
+		return storage.Usage{}, fmt.Errorf("Drive storage quota returned zero limit")
+	}
+	remainingBytes := limitBytes - usedBytes
+	if remainingBytes < 0 {
+		remainingBytes = 0
+	}
+	usage.LimitBytes = &limitBytes
+	usage.RemainingBytes = &remainingBytes
+	return usage, nil
 }
 
 // Put streams bytes into a Drive resumable-upload session.
@@ -480,6 +531,15 @@ type driveUploadMetadata struct {
 	AppProperties map[string]string `json:"appProperties,omitempty"`
 }
 
+type driveAbout struct {
+	StorageQuota driveStorageQuota `json:"storageQuota"`
+}
+
+type driveStorageQuota struct {
+	Limit string `json:"limit"`
+	Usage string `json:"usage"`
+}
+
 func (f driveFile) objectInfo(key string) storage.ObjectInfo {
 	return storage.ObjectInfo{Key: key, Size: f.Size, ContentType: f.MimeType,
 		LastModified: f.ModifiedTime}
@@ -542,6 +602,14 @@ func driveDownloadURL(fileID string) string {
 
 func escapeQueryValue(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, `\`, `\\`), `'`, `\'`)
+}
+
+func parseQuotaBytes(field string, value string) (int64, error) {
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed < 0 {
+		return 0, fmt.Errorf("Drive storage quota returned invalid %s", field)
+	}
+	return parsed, nil
 }
 
 func waitRetry(ctx context.Context, attempt int) error {

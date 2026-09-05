@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import type { Session, Tag } from "@/lib/api";
+import type { Session, StorageUsage, Tag } from "@/lib/api";
 import {
   getRoute,
   navigate,
@@ -23,6 +23,18 @@ type NavItemProps = {
   count?: string;
   onNavigate?: () => void;
 };
+
+function formatStorageBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Math.max(0, bytes);
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const precision = value >= 100 || unit === 0 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(precision)} ${units[unit]}`;
+}
 
 function NavItem({
   href,
@@ -56,12 +68,16 @@ export function Navigation({
   session,
   documents,
   tags,
+  storageUsage,
+  storageUsageState,
   open,
   onClose,
 }: {
   session: Session;
   documents: DocumentItem[];
   tags: Tag[];
+  storageUsage: StorageUsage | null;
+  storageUsageState: "loading" | "ready" | "unavailable";
   open: boolean;
   onClose: () => void;
 }) {
@@ -193,12 +209,62 @@ export function Navigation({
             </nav>
           </>
         )}
-        <div className="vault-rail__note">
-          <strong>Private by design.</strong>
-          <p>
-            Original files stay preserved. Metadata makes them easier to find.
-          </p>
-          <span>Session authenticated</span>
+        <div className="vault-storage-card" aria-live="polite">
+          <strong>Google Drive storage</strong>
+          {storageUsageState === "loading" && (
+            <p className="vault-storage-card__status">Reading host account…</p>
+          )}
+          {storageUsageState === "unavailable" && (
+            <p className="vault-storage-card__status">
+              Storage usage is unavailable.
+            </p>
+          )}
+          {storageUsageState === "ready" && storageUsage && (
+            <>
+              {storageUsage.limitBytes === null ? (
+                <p className="vault-storage-card__summary">
+                  {formatStorageBytes(storageUsage.usedBytes)} used · No
+                  storage limit
+                </p>
+              ) : (
+                <>
+                  <p className="vault-storage-card__summary">
+                    {formatStorageBytes(storageUsage.usedBytes)} of{" "}
+                    {formatStorageBytes(storageUsage.limitBytes)} used
+                  </p>
+                  <div
+                    className="vault-storage-card__track"
+                    role="progressbar"
+                    aria-label="Host Google Drive storage used"
+                    aria-valuemin={0}
+                    aria-valuemax={storageUsage.limitBytes}
+                    aria-valuenow={Math.min(
+                      storageUsage.usedBytes,
+                      storageUsage.limitBytes,
+                    )}
+                    aria-valuetext={`${formatStorageBytes(
+                      storageUsage.usedBytes,
+                    )} of ${formatStorageBytes(storageUsage.limitBytes)} used`}
+                  >
+                    <span
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (storageUsage.usedBytes /
+                            storageUsage.limitBytes) *
+                            100,
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="vault-storage-card__remaining">
+                    {formatStorageBytes(storageUsage.remainingBytes ?? 0)}{" "}
+                    remaining
+                  </span>
+                </>
+              )}
+            </>
+          )}
         </div>
       </aside>
     </>

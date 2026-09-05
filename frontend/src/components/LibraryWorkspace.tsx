@@ -123,7 +123,7 @@ export function LibraryWorkspace({
             {filtered.length} documents
           </span>
           <div className="vault-select">
-            <Filter size={14} aria-hidden="true" />
+            <Filter size={18} strokeWidth={1.75} aria-hidden="true" />
             <Select
               value={filterTag || null}
               onValueChange={(value) => setFilterTag(value ?? "")}
@@ -159,7 +159,13 @@ export function LibraryWorkspace({
               onValueChange={(value) => setSort(value ?? "updated")}
             >
               <SelectTrigger aria-label="Sort documents" className="vault-select__trigger">
-                <SelectValue />
+                <SelectValue>
+                  {sort === "updated"
+                    ? "Last modified"
+                    : sort === "title"
+                      ? "Title"
+                      : "File size"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent align="end" className="vault-select-content">
                 <SelectItem value="updated">Last modified</SelectItem>
@@ -189,7 +195,7 @@ export function LibraryWorkspace({
               aria-pressed={viewMode === "list"}
               onClick={() => setViewMode("list")}
             >
-              <List size={15} aria-hidden="true" />
+              <List size={18} strokeWidth={1.75} aria-hidden="true" />
             </Button>
             <Button
               variant="ghost"
@@ -198,7 +204,7 @@ export function LibraryWorkspace({
               aria-pressed={viewMode === "grid"}
               onClick={() => setViewMode("grid")}
             >
-              <Grid2X2 size={15} aria-hidden="true" />
+              <Grid2X2 size={18} strokeWidth={1.75} aria-hidden="true" />
             </Button>
           </div>
         </div>

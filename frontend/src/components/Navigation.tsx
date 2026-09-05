@@ -85,7 +85,6 @@ export function Navigation({
       document.querySelector<HTMLElement>(".vault-topbar"),
       document.querySelector<HTMLElement>(".vault-main"),
       document.querySelector<HTMLElement>(".vault-upload-queue"),
-      document.querySelector<HTMLElement>(".vault-wave-footer"),
     ].filter((element): element is HTMLElement => element !== null);
     const focusable = rail?.querySelectorAll<HTMLElement>("a[href], button");
     background.forEach((element) => {

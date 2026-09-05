@@ -58,9 +58,12 @@ export function UploadDialog({
         className="vault-upload-dialog vault-login__sheet"
       >
         <DialogHeader className="vault-upload-dialog__header">
-          <DialogTitle id="upload-dialog-title">
-            Add to the archive
-          </DialogTitle>
+          <div className="vault-upload-dialog__heading">
+            <DialogTitle id="upload-dialog-title">Add documents</DialogTitle>
+            <DialogDescription className="vault-upload-dialog__description">
+              Preserve your original files exactly as uploaded.
+            </DialogDescription>
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -72,53 +75,59 @@ export function UploadDialog({
             <X size={17} aria-hidden="true" />
           </Button>
         </DialogHeader>
-        <DialogDescription className="vault-upload-dialog__description">
-          Original files are preserved exactly as uploaded. PDF, JPEG, PNG, and
-          WebP files up to 50 MB are supported.
-        </DialogDescription>
-        <Button
-          variant="default"
-          className="vault-button vault-button--primary"
-          type="button"
-          onClick={() => inputRef.current?.click()}
-        >
-          <Upload size={15} aria-hidden="true" /> Choose files
-        </Button>
-        <button
-          type="button"
-          onDragEnter={(event) => {
-            event.preventDefault();
-            setDragging(true);
-          }}
-          onDragOver={(event) => event.preventDefault()}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragging(false);
-            acceptFiles(Array.from(event.dataTransfer.files));
-          }}
-          onClick={() => inputRef.current?.click()}
-          className={`vault-upload-dropzone ${dragging ? "is-dragging" : ""}`}
-        >
-          Drop files here, or click to browse
-        </button>
-        {validationError && (
-          <div className="vault-notice" role="alert">
-            <CircleAlert size={14} aria-hidden="true" /> {validationError}
-          </div>
-        )}
-        <input
-          ref={inputRef}
-          hidden
-          type="file"
-          multiple
-          accept="application/pdf,image/jpeg,image/png,image/webp"
-          onChange={choose}
-        />
-        <p className="vault-login__note">
-          You can add a title and reusable tags from the document inspector
-          after upload.
-        </p>
+        <div className="vault-upload-dialog__body">
+          <button
+            type="button"
+            aria-describedby="upload-dialog-formats"
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              acceptFiles(Array.from(event.dataTransfer.files));
+            }}
+            onClick={() => inputRef.current?.click()}
+            className={`vault-upload-dropzone ${dragging ? "is-dragging" : ""}`}
+          >
+            <span className="vault-upload-dropzone__icon" aria-hidden="true">
+              <Upload size={22} strokeWidth={1.8} />
+            </span>
+            <span className="vault-upload-dropzone__copy">
+              <strong>Drop files here</strong>
+              <span>or browse from your device</span>
+            </span>
+            <span className="vault-upload-dropzone__choose">Choose files</span>
+          </button>
+          {validationError && (
+            <div className="vault-notice" role="alert">
+              <CircleAlert size={14} aria-hidden="true" /> {validationError}
+            </div>
+          )}
+          <input
+            ref={inputRef}
+            hidden
+            type="file"
+            multiple
+            accept="application/pdf,image/jpeg,image/png,image/webp"
+            onChange={choose}
+          />
+        </div>
+        <div className="vault-upload-dialog__details">
+          <p
+            className="vault-upload-dialog__formats"
+            id="upload-dialog-formats"
+          >
+            PDF, JPEG, PNG or WebP <span aria-hidden="true">·</span> 50 MB
+            maximum
+          </p>
+          <p className="vault-upload-dialog__note">
+            Add titles and reusable tags from the inspector after upload.
+          </p>
+        </div>
       </DialogContent>
     </Dialog>
   );

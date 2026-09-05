@@ -355,7 +355,6 @@ export default function VaultApp() {
           onComplete={completeUpload}
         />
       )}
-      <footer className="vault-wave-footer" aria-hidden="true" />
     </div>
   );
 }

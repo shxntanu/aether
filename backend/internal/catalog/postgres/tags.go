@@ -21,6 +21,36 @@ func (s *Store) CreateTag(ctx context.Context, tag domain.Tag) error {
 	return translateError("create tag", err)
 }
 
+// UpdateTag changes the names of an existing reusable tag while preserving its ID.
+func (s *Store) UpdateTag(ctx context.Context, tag domain.Tag) (domain.Tag, error) {
+	result := s.orm.WithContext(ctx).
+		Model(&tagModel{}).
+		Where("id = ?", tag.ID).
+		Updates(map[string]any{
+			"display_name":    tag.DisplayName,
+			"normalized_name": tag.NormalizedName,
+		})
+	if result.Error != nil {
+		return domain.Tag{}, translateError("update tag", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return domain.Tag{}, fmt.Errorf("update tag %q: %w", tag.ID, domain.ErrNotFound)
+	}
+	return tag, nil
+}
+
+// DeleteTag removes a reusable tag; the database cascades its document associations.
+func (s *Store) DeleteTag(ctx context.Context, id domain.TagID) error {
+	result := s.orm.WithContext(ctx).Where("id = ?", id).Delete(&tagModel{})
+	if result.Error != nil {
+		return fmt.Errorf("delete tag %q: %w", id, result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("delete tag %q: %w", id, domain.ErrNotFound)
+	}
+	return nil
+}
+
 // ReplaceDocumentTags replaces all tag associations for a document.
 func (s *Store) ReplaceDocumentTags(
 	ctx context.Context,

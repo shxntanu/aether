@@ -8,11 +8,11 @@ import (
 // TagID uniquely identifies a reusable tag.
 type TagID string
 
-// Tag retains display spelling while providing a case-insensitive key.
+// Tag retains user-facing spelling while providing a case-insensitive key.
 type Tag struct {
 	// ID uniquely identifies the reusable tag.
 	ID TagID `json:"id"`
-	// DisplayName retains the first accepted spelling.
+	// DisplayName contains the current user-facing spelling.
 	DisplayName string `json:"displayName"`
 	// NormalizedName is the case-insensitive identity used for matching.
 	NormalizedName string `json:"normalizedName"`

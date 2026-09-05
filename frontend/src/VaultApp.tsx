@@ -340,6 +340,34 @@ export default function VaultApp() {
                 const created = await api.createTag(name);
                 setTags((current) => [...current, created.data]);
               }}
+              onUpdateTag={async (tag, name) => {
+                const updated = await api.updateTag(tag.id, name);
+                setTags((current) =>
+                  current.map((entry) =>
+                    entry.id === updated.data.id ? updated.data : entry,
+                  ),
+                );
+                setDocuments((current) =>
+                  current.map((item) => ({
+                    ...item,
+                    tags: item.tags.map((entry) =>
+                      entry.id === updated.data.id ? updated.data : entry,
+                    ),
+                  })),
+                );
+              }}
+              onDeleteTag={async (tag) => {
+                await api.deleteTag(tag.id);
+                setTags((current) =>
+                  current.filter((entry) => entry.id !== tag.id),
+                );
+                setDocuments((current) =>
+                  current.map((item) => ({
+                    ...item,
+                    tags: item.tags.filter((entry) => entry.id !== tag.id),
+                  })),
+                );
+              }}
             />
           )}
           {route === "trash" && (

@@ -432,6 +432,27 @@ func (s *Service) CreateTag(ctx context.Context, name string) (domain.Tag, error
 	return tag, nil
 }
 
+// UpdateTag renames a reusable tag while preserving existing document associations.
+func (s *Service) UpdateTag(
+	ctx context.Context,
+	id domain.TagID,
+	name string,
+) (domain.Tag, error) {
+	if id == "" || validateTagNames([]string{name}) != nil {
+		return domain.Tag{}, ErrInvalidMetadata
+	}
+	tag, _ := domain.NewTag(id, name)
+	return s.repository.UpdateTag(ctx, tag)
+}
+
+// DeleteTag removes a reusable tag and all of its document associations.
+func (s *Service) DeleteTag(ctx context.Context, id domain.TagID) error {
+	if id == "" {
+		return ErrInvalidMetadata
+	}
+	return s.repository.DeleteTag(ctx, id)
+}
+
 // OpenContent opens a ready document, optionally restricted to a byte range.
 func (s *Service) OpenContent(
 	ctx context.Context,

@@ -40,6 +40,9 @@ that do not meet the vault's privacy requirements.
   Drive's viewer or original-content link; local storage streams through Aether.
 - `GET /api/v1/tags?q=tax&limit=20` provides tag autocomplete.
 - `POST /api/v1/tags` accepts `{"name":"Tax"}`.
+- `PATCH /api/v1/tags/{id}` accepts `{"name":"Tax records"}` and preserves
+  existing document associations.
+- `DELETE /api/v1/tags/{id}` removes the tag and its document associations.
 
 Uploads accept PDF, JPEG, PNG, and WebP signatures up to 50 MiB. The catalog
 stores a SHA-256 digest, and every successful metadata state is written as a

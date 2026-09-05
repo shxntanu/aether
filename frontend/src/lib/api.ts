@@ -131,7 +131,7 @@ export type DocumentRecord = {
 export type Tag = {
   /** id uniquely identifies the reusable tag. */
   id: string;
-  /** displayName preserves the first accepted user-facing spelling. */
+  /** displayName contains the current user-facing spelling. */
   displayName: string;
   /** normalizedName is the case-insensitive identity used by filters. */
   normalizedName: string;
@@ -325,7 +325,11 @@ export const api = {
     for (const tag of metadata.tags ?? []) body.append("tags", tag);
 
     try {
-      const response = await uploadRequest(body, metadata.onProgress, idempotencyKey);
+      const response = await uploadRequest(
+        body,
+        metadata.onProgress,
+        idempotencyKey,
+      );
       metadata.onProgress?.({
         state: "complete",
         loaded: file.size,
@@ -361,6 +365,22 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name }),
       headers: { "Content-Type": "application/json" },
+    });
+  },
+
+  /** updateTag renames a reusable tag without changing its identity. */
+  updateTag(id: string, name: string): Promise<ApiResponse<Tag>> {
+    return request(`/tags/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+      headers: { "Content-Type": "application/json" },
+    });
+  },
+
+  /** deleteTag removes a reusable tag from the vault and attached documents. */
+  deleteTag(id: string): Promise<ApiResponse<null>> {
+    return request(`/tags/${encodeURIComponent(id)}`, {
+      method: "DELETE",
     });
   },
 
@@ -455,13 +475,25 @@ function uploadRequest(
       });
     };
     xhr.upload.onload = () => {
-      onProgress?.({ state: "processing", loaded: null, total: null, percent: 100 });
+      onProgress?.({
+        state: "processing",
+        loaded: null,
+        total: null,
+        percent: 100,
+      });
     };
-    xhr.onerror = () => reject(new ApiError(0, "network_error", "The request could not be sent."));
-    xhr.onabort = () => reject(new ApiError(0, "network_error", "The upload was canceled."));
+    xhr.onerror = () =>
+      reject(
+        new ApiError(0, "network_error", "The request could not be sent."),
+      );
+    xhr.onabort = () =>
+      reject(new ApiError(0, "network_error", "The upload was canceled."));
     xhr.onload = () => {
       const headers = responseHeaders(xhr.getAllResponseHeaders());
-      const response = new Response(xhr.responseText, { status: xhr.status, headers });
+      const response = new Response(xhr.responseText, {
+        status: xhr.status,
+        headers,
+      });
       void parseBody(response)
         .then((parsed) => {
           if (xhr.status < 200 || xhr.status >= 300) {
@@ -485,7 +517,11 @@ function responseHeaders(rawHeaders: string): Headers {
   for (const line of rawHeaders.trim().split(/[\r\n]+/)) {
     if (line === "") continue;
     const separator = line.indexOf(":");
-    if (separator > 0) headers.append(line.slice(0, separator), line.slice(separator + 1).trim());
+    if (separator > 0)
+      headers.append(
+        line.slice(0, separator),
+        line.slice(separator + 1).trim(),
+      );
   }
   return headers;
 }

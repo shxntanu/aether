@@ -1236,20 +1236,36 @@ textarea:focus-visible,
 }
 
 .vault-tag-card {
-  align-items: stretch;
   background: var(--vault-paper-strong);
   border: 1px solid var(--vault-line);
   color: inherit;
-  cursor: pointer;
-  display: block;
+  display: flex;
+  flex-direction: column;
   min-height: 145px;
-  padding: 18px;
   text-align: left;
 }
 
-.vault-tag-card:hover {
+.vault-tag-card:hover,
+.vault-tag-card:focus-within {
   background: #f7eadf;
   border-color: var(--vault-indigo);
+}
+
+.vault-tag-card__open {
+  align-items: stretch;
+  color: inherit;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  height: auto;
+  justify-content: space-between;
+  padding: 18px;
+  text-align: left;
+  white-space: normal;
+}
+
+.vault-tag-card__open:hover {
+  background: transparent;
 }
 
 .vault-tag-card__top {
@@ -1263,17 +1279,78 @@ textarea:focus-visible,
   font-size: 18px;
 }
 
-.vault-tag-card p {
+.vault-tag-card__count {
   align-items: center;
   color: var(--vault-ink-soft);
   display: flex;
   font-size: 11px;
   gap: 3px;
-  margin: 22px 0 0;
+  margin-top: 22px;
 }
 
 .vault-tag-card svg {
   color: var(--vault-indigo);
+}
+
+.vault-tag-card__actions {
+  border-top: 1px solid var(--vault-line);
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+}
+
+.vault-tag-card__actions .vault-button {
+  min-height: 36px;
+  min-width: 36px;
+}
+
+.vault-tag-card__delete svg {
+  color: var(--vault-red);
+}
+
+.vault-tag-card__edit {
+  display: grid;
+  flex: 1;
+  gap: 8px;
+  padding: 16px;
+}
+
+.vault-tag-card__edit label {
+  color: var(--vault-ink-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.vault-tag-card__edit-actions,
+.vault-tag-card__confirm {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.vault-tag-card__edit-actions {
+  align-self: end;
+}
+
+.vault-tag-card__edit-actions .vault-button,
+.vault-tag-card__confirm .vault-button {
+  min-height: 36px;
+}
+
+.vault-tag-card__confirm {
+  background: #f8e4dd;
+  border-top: 1px solid var(--vault-line);
+  flex-wrap: wrap;
+  padding: 10px 12px;
+}
+
+.vault-tag-card__confirm p {
+  color: var(--vault-red);
+  flex: 1 0 100%;
+  font-size: 12px;
+  margin: 0;
 }
 
 .vault-members {

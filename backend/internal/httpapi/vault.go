@@ -130,6 +130,16 @@ func registerVaultRoutes(
 			handleTagCreate(w, r, vaultService)
 		},
 	)))
+	mux.Handle("PATCH /api/v1/tags/{id}", memberRoute(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			handleTagUpdate(w, r, vaultService)
+		},
+	)))
+	mux.Handle("DELETE /api/v1/tags/{id}", memberRoute(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			handleTagDelete(w, r, vaultService)
+		},
+	)))
 }
 
 func handleDocumentDelete(w http.ResponseWriter, r *http.Request, service VaultService) {
@@ -408,6 +418,34 @@ func handleTagCreate(w http.ResponseWriter, r *http.Request, service VaultServic
 	writeJSON(w, http.StatusCreated, tag)
 }
 
+func handleTagUpdate(w http.ResponseWriter, r *http.Request, service VaultService) {
+	var input struct {
+		Name string `json:"name"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request")
+		return
+	}
+	tag, err := service.UpdateTag(
+		r.Context(),
+		domain.TagID(r.PathValue("id")),
+		input.Name,
+	)
+	if err != nil {
+		writeVaultError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tag)
+}
+
+func handleTagDelete(w http.ResponseWriter, r *http.Request, service VaultService) {
+	if err := service.DeleteTag(r.Context(), domain.TagID(r.PathValue("id"))); err != nil {
+		writeVaultError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func writeRecord(w http.ResponseWriter, status int, record vault.DocumentRecord) {
 	w.Header().Set("ETag", fmt.Sprintf("\"%d\"", record.Document.Version))
 	writeJSON(w, status, record)
@@ -419,6 +457,8 @@ func writeVaultError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, domain.ErrNotFound), errors.Is(err, storage.ErrNotFound):
 		status, code = http.StatusNotFound, "not_found"
+	case errors.Is(err, domain.ErrAlreadyExists):
+		status, code = http.StatusConflict, "already_exists"
 	case errors.Is(err, domain.ErrConflict):
 		status, code = http.StatusPreconditionFailed, "version_conflict"
 	case errors.Is(err, vault.ErrDocumentTooLarge):

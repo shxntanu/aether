@@ -100,6 +100,10 @@ type VaultService interface {
 	ListTags(context.Context, string, int) ([]domain.Tag, error)
 	// CreateTag creates or returns a reusable tag.
 	CreateTag(context.Context, string) (domain.Tag, error)
+	// UpdateTag changes a reusable tag's display and normalized names.
+	UpdateTag(context.Context, domain.TagID, string) (domain.Tag, error)
+	// DeleteTag removes a reusable tag and its document associations.
+	DeleteTag(context.Context, domain.TagID) error
 	// OpenContent opens a whole document or requested byte range.
 	OpenContent(
 		context.Context,

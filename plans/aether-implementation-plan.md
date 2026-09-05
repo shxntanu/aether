@@ -71,7 +71,7 @@ type ObjectStore interface {
 }
 ```
 
-Implement local-filesystem and Google Drive adapters. Browsers never receive provider credentials or public Drive URLs.
+Implement local-filesystem and Google Drive adapters. Browsers never receive provider credentials; authenticated content requests may redirect to provider-hosted links.
 
 ### Document lifecycle
 

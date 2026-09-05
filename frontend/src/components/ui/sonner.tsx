@@ -1,14 +1,13 @@
-import { useTheme } from "next-themes"
+import type { CSSProperties } from "react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
+/** Renders application toasts using Aether's fixed light archive theme. */
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
+      theme="light"
+      className="toaster group vault-toaster"
       icons={{
         success: (
           <CircleCheckIcon className="size-4" />
@@ -32,11 +31,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
-        } as React.CSSProperties
+        } as CSSProperties
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: "cn-toast vault-toast",
+          title: "vault-toast__title",
+          description: "vault-toast__description",
+          error: "vault-toast--error",
         },
       }}
       {...props}

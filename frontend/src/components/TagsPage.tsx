@@ -7,8 +7,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
-import type { Tag } from "@/lib/api";
+import { ApiError, type Tag } from "@/lib/api";
 import type { DocumentItem } from "@/lib/vault";
 import { getErrorMessage } from "@/lib/vault";
 import { Button } from "@/components/ui/button";
@@ -63,7 +64,11 @@ export function TagsPage({
       setEditName("");
       setMessage("Tag renamed");
     } catch (error) {
-      setMessage(getErrorMessage(error));
+      const description =
+        error instanceof ApiError && error.code === "already_exists"
+          ? "A tag with that name already exists. Choose a different name."
+          : getErrorMessage(error);
+      toast.error("Couldn't rename tag", { description });
     } finally {
       setWorkingId(null);
     }

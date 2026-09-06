@@ -49,6 +49,14 @@ type Repository interface {
 	domain.Repository
 }
 
+type searchRepository interface {
+	SearchDocuments(
+		context.Context,
+		string,
+		int,
+	) ([]domain.DocumentSearchResult, error)
+}
+
 // Service coordinates catalog records, immutable objects, and manifests.
 type Service struct {
 	repository Repository
@@ -64,6 +72,17 @@ type DocumentRecord struct {
 	Document domain.Document `json:"document"`
 	// Tags contains the document's reusable tags.
 	Tags []domain.Tag `json:"tags"`
+}
+
+// DocumentSearchResult combines a ranked document record with typed visible
+// evidence explaining why it matched.
+type DocumentSearchResult struct {
+	// Document is the public catalog metadata.
+	Document domain.Document `json:"document"`
+	// Tags contains every reusable tag attached to the document.
+	Tags []domain.Tag `json:"tags"`
+	// Evidence identifies matched titles, filenames, or tags.
+	Evidence []domain.DocumentSearchEvidence `json:"evidence"`
 }
 
 // Upload describes a streamed original document and optional metadata.
@@ -301,6 +320,43 @@ func (s *Service) List(
 		records = append(records, DocumentRecord{Document: document, Tags: documentTags})
 	}
 	return records, nil
+}
+
+// Search returns recent ready documents for an empty query or ranked metadata
+// matches for a non-empty query.
+func (s *Service) Search(
+	ctx context.Context,
+	query string,
+	limit int,
+) ([]DocumentSearchResult, error) {
+	normalizedQuery := strings.TrimSpace(query)
+	runes := []rune(normalizedQuery)
+	if len(runes) > 200 {
+		normalizedQuery = string(runes[:200])
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	repository, ok := s.repository.(searchRepository)
+	if !ok {
+		return nil, errors.New("document search is not configured")
+	}
+	results, err := repository.SearchDocuments(ctx, normalizedQuery, limit)
+	if err != nil {
+		return nil, err
+	}
+	searchResults := make([]DocumentSearchResult, len(results))
+	for index, result := range results {
+		searchResults[index] = DocumentSearchResult{
+			Document: result.Document,
+			Tags:     result.Tags,
+			Evidence: result.Evidence,
+		}
+	}
+	return searchResults, nil
 }
 
 // ListDeleted returns soft-deleted documents and their tags for Trash views.

@@ -171,11 +171,25 @@ textarea:focus-visible,
   z-index: 1;
 }
 
+button.vault-search {
+  font-family: "Newsreader Variable", Georgia, serif;
+  text-align: left;
+  transition: border-color 160ms ease, box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+button.vault-search:hover {
+  border-color: var(--vault-indigo);
+  box-shadow: 0 5px 12px rgba(35, 71, 115, 0.15);
+  transform: translateY(-1px);
+}
+
 .vault-search svg {
   flex: 0 0 auto;
 }
 
-.vault-search input {
+.vault-search input,
+.vault-search__placeholder {
   background: transparent;
   border: 0;
   color: var(--vault-ink);
@@ -200,6 +214,229 @@ textarea:focus-visible,
   font-size: 10px;
   line-height: 20px;
   padding: 0 6px;
+}
+
+.vault-command-palette {
+  --tw-translate-x: 0px !important;
+  --tw-translate-y: 0px !important;
+  background: var(--vault-paper-strong);
+  border: 1px solid var(--vault-line-dark);
+  box-shadow: var(--vault-shadow);
+  color: var(--vault-ink);
+  display: block;
+  gap: 0;
+  max-height: min(680px, calc(100svh - 32px));
+  max-width: 680px;
+  overflow: hidden;
+  padding: 0;
+  top: max(96px, 14svh) !important;
+  transform: translateX(-50%) !important;
+  width: calc(100% - 32px);
+}
+
+.vault-command-palette__header {
+  gap: 5px;
+  padding: 19px 22px 13px;
+}
+
+.vault-command-palette__header [data-slot="dialog-title"] {
+  font-family: "Newsreader Variable", Georgia, serif;
+  font-size: 27px;
+  font-weight: 580;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.vault-command-palette__header [data-slot="dialog-description"] {
+  color: var(--vault-ink-soft);
+  font-size: 13px;
+}
+
+.vault-command-palette__input-wrap {
+  align-items: center;
+  border-bottom: 1px solid var(--vault-line);
+  border-top: 1px solid var(--vault-line);
+  color: var(--vault-ink-soft);
+  display: flex;
+  gap: 11px;
+  margin: 0;
+  padding: 0 22px;
+}
+
+.vault-command-palette__input-wrap input {
+  background: transparent;
+  border: 0;
+  color: var(--vault-ink);
+  flex: 1;
+  font-family: "Newsreader Variable", Georgia, serif;
+  font-size: 18px;
+  height: 54px;
+  min-width: 0;
+  outline: 0;
+}
+
+.vault-command-palette__input-wrap input::placeholder {
+  color: var(--vault-ink-faint);
+  opacity: 1;
+}
+
+.vault-command-palette__input-wrap kbd {
+  border: 1px solid var(--vault-line);
+  border-radius: 3px;
+  color: var(--vault-ink-soft);
+  font-size: 10px;
+  padding: 2px 6px;
+  text-transform: uppercase;
+}
+
+.vault-command-palette__results {
+  max-height: min(430px, 52svh);
+  min-height: 120px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.vault-command-result {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--vault-radius);
+  color: var(--vault-ink);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 38px minmax(0, 1fr) 22px;
+  min-height: 70px;
+  padding: 9px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.vault-command-result:hover,
+.vault-command-result[data-active="true"] {
+  background: var(--vault-paper-warm);
+}
+
+.vault-command-result[data-active="true"] {
+  box-shadow: inset 1px 0 var(--vault-indigo);
+}
+
+.vault-command-result__icon {
+  align-items: center;
+  background: var(--vault-paper-blue);
+  border-radius: 3px;
+  color: var(--vault-indigo);
+  display: flex;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.vault-command-result__icon svg {
+  height: 18px;
+  width: 18px;
+}
+
+.vault-command-result__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vault-command-result__body strong {
+  font-family: "Newsreader Variable", Georgia, serif;
+  font-size: 16px;
+  font-weight: 620;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-command-result__filename {
+  color: var(--vault-ink-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-command-result__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.vault-command-result__tags span {
+  background: var(--vault-peach);
+  border-radius: 3px;
+  color: #6f3d31;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 18px;
+  padding: 0 6px;
+  text-transform: uppercase;
+}
+
+.vault-command-result__evidence {
+  color: var(--vault-ink-faint);
+  font-size: 10px;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vault-command-result__enter {
+  color: var(--vault-ink-faint);
+  opacity: 0;
+}
+
+.vault-command-result[data-active="true"] .vault-command-result__enter {
+  opacity: 1;
+}
+
+.vault-command-palette__empty,
+.vault-command-palette__error {
+  align-content: center;
+  color: var(--vault-ink-soft);
+  display: grid;
+  gap: 4px;
+  min-height: 112px;
+  padding: 20px;
+  text-align: center;
+}
+
+.vault-command-palette__empty strong {
+  color: var(--vault-ink);
+  font-family: "Newsreader Variable", Georgia, serif;
+  font-size: 18px;
+}
+
+.vault-command-palette__error {
+  background: #fff9f4;
+  color: var(--vault-red);
+}
+
+.vault-command-palette__footer {
+  align-items: center;
+  background: var(--vault-paper-warm);
+  border-top: 1px solid var(--vault-line);
+  color: var(--vault-ink-soft);
+  display: flex;
+  font-size: 10px;
+  gap: 16px;
+  justify-content: flex-end;
+  min-height: 34px;
+  padding: 6px 14px;
+  text-transform: uppercase;
+}
+
+.vault-command-palette__footer span {
+  align-items: center;
+  display: inline-flex;
+  gap: 3px;
 }
 
 .vault-topbar__actions {
@@ -1961,6 +2198,34 @@ textarea:focus-visible,
     width: calc(100% - 24px);
   }
 
+  .vault-command-palette {
+    max-height: calc(100svh - 24px);
+    top: 12px !important;
+    width: calc(100% - 24px);
+  }
+
+  .vault-command-palette__header {
+    padding: 17px 18px 12px;
+  }
+
+  .vault-command-palette__input-wrap {
+    padding: 0 18px;
+  }
+
+  .vault-command-palette__results {
+    max-height: calc(100svh - 190px);
+  }
+
+  .vault-command-result {
+    min-height: 72px;
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  .vault-command-palette__footer {
+    display: none;
+  }
+
   .vault-upload-dialog__header {
     padding: 18px 62px 14px 18px;
   }
@@ -2033,7 +2298,7 @@ textarea:focus-visible,
     width: auto;
   }
 
-  .vault-search input {
+  .vault-search__placeholder {
     font-size: 14px;
   }
 

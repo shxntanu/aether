@@ -280,7 +280,15 @@ export default function VaultApp() {
         session={session}
         onMenu={() => setNavOpen((current) => !current)}
         navOpen={navOpen}
-        onSearch={setQuery}
+        onOpenDocument={(record) => {
+          setDocuments((current) => {
+            const remaining = current.filter(
+              (item) => item.document.id !== record.document.id,
+            );
+            return [record, ...remaining];
+          });
+          openDocument(record.document.id);
+        }}
         onUpload={() => setUploadOpen(true)}
         onLogout={() => void logout()}
       />

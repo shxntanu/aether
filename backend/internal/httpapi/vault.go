@@ -52,6 +52,10 @@ type deletedVaultService interface {
 	) ([]vault.DocumentRecord, error)
 }
 
+type searchableVaultService interface {
+	Search(context.Context, string, int) ([]vault.DocumentSearchResult, error)
+}
+
 type actorVaultLinkService interface {
 	ContentLinkByActor(
 		context.Context,
@@ -82,6 +86,11 @@ func registerVaultRoutes(
 	mux.Handle("GET /api/v1/documents", memberRoute(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			handleDocumentList(w, r, vaultService)
+		},
+	)))
+	mux.Handle("GET /api/v1/search", memberRoute(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			handleDocumentSearch(w, r, vaultService)
 		},
 	)))
 	mux.Handle("GET /api/v1/documents/{id}", memberRoute(http.HandlerFunc(
@@ -140,6 +149,33 @@ func registerVaultRoutes(
 			handleTagDelete(w, r, vaultService)
 		},
 	)))
+}
+
+func handleDocumentSearch(w http.ResponseWriter, r *http.Request, service VaultService) {
+	setNoStore(w)
+	searchService, ok := service.(searchableVaultService)
+	if !ok {
+		writeError(w, http.StatusServiceUnavailable, "vault_error")
+		return
+	}
+	limit := 10
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil || parsedLimit <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		limit = parsedLimit
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	results, err := searchService.Search(r.Context(), r.URL.Query().Get("q"), limit)
+	if err != nil {
+		writeVaultError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }
 
 func handleDocumentDelete(w http.ResponseWriter, r *http.Request, service VaultService) {

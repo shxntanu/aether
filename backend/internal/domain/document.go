@@ -135,6 +135,39 @@ type DocumentListOptions struct {
 	Limit int
 }
 
+// DocumentSearchField identifies the visible metadata field that matched a
+// document search query.
+type DocumentSearchField string
+
+const (
+	// DocumentSearchFieldTitle indicates a title match.
+	DocumentSearchFieldTitle DocumentSearchField = "title"
+	// DocumentSearchFieldFilename indicates an original-filename match.
+	DocumentSearchFieldFilename DocumentSearchField = "filename"
+	// DocumentSearchFieldTag indicates a reusable-tag match.
+	DocumentSearchFieldTag DocumentSearchField = "tag"
+)
+
+// DocumentSearchEvidence explains one visible metadata match without
+// exposing the catalog's internal ranking score.
+type DocumentSearchEvidence struct {
+	// Field identifies the matched metadata field.
+	Field DocumentSearchField `json:"field"`
+	// Value preserves the matched field's user-facing spelling.
+	Value string `json:"value"`
+}
+
+// DocumentSearchResult combines a ranked ready document with its tags and
+// visible match evidence.
+type DocumentSearchResult struct {
+	// Document is the ranked ready document.
+	Document Document `json:"document"`
+	// Tags contains every reusable tag attached to the document.
+	Tags []Tag `json:"tags"`
+	// Evidence identifies metadata fields that matched a non-empty query.
+	Evidence []DocumentSearchEvidence `json:"evidence"`
+}
+
 // TransitionTo applies an allowed lifecycle transition at now.
 func (d *Document) TransitionTo(next DocumentStatus, now time.Time) error {
 	allowed := map[DocumentStatus]map[DocumentStatus]bool{

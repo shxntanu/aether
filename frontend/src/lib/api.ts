@@ -127,6 +127,20 @@ export type DocumentRecord = {
   tags: Tag[];
 };
 
+/** SearchMatchEvidence identifies one visible metadata field matched by search. */
+export type SearchMatchEvidence = {
+  /** field names the matched title, original filename, or reusable tag. */
+  field: "title" | "filename" | "tag";
+  /** value preserves the user-facing spelling of the matched metadata. */
+  value: string;
+};
+
+/** DocumentSearchResult is a ranked document with visible match evidence. */
+export type DocumentSearchResult = DocumentRecord & {
+  /** evidence explains why a non-empty query matched the document. */
+  evidence: SearchMatchEvidence[];
+};
+
 /** Tag is the reusable tag record attached to documents. */
 export type Tag = {
   /** id uniquely identifies the reusable tag. */
@@ -262,6 +276,19 @@ export const api = {
     if (params.has("tag") && options?.match) params.set("match", options.match);
     if (options?.status) params.set("status", options.status);
     return request(`/documents${querySuffix(params)}`);
+  },
+
+  /** searchDocuments returns recent or fuzzy-matched ready documents. */
+  searchDocuments(
+    query: string,
+    limit = 10,
+    signal?: AbortSignal,
+  ): Promise<ApiResponse<{ results: DocumentSearchResult[] }>> {
+    const params = new URLSearchParams({
+      q: query,
+      limit: String(limit),
+    });
+    return request(`/search${querySuffix(params)}`, { signal });
   },
 
   /** getDocument loads one ready document record by id. */

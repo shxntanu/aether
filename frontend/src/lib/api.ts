@@ -13,6 +13,7 @@ type KnownApiErrorCode =
   | "administrator_required"
   | "already_exists"
   | "authentication_required"
+  | "backend_unavailable"
   | "catalog_error"
   | "csrf_required"
   | "document_too_large"
@@ -203,6 +204,7 @@ const knownApiErrorCodes: ReadonlySet<string> = new Set<KnownApiErrorCode>([
   "administrator_required",
   "already_exists",
   "authentication_required",
+  "backend_unavailable",
   "catalog_error",
   "csrf_required",
   "deletion_in_progress",
@@ -235,10 +237,10 @@ const emptyResponse = 204;
 
 /** api is the typed browser boundary for the current /api/v1 backend contract. */
 export const api = {
-  /** getSession loads the authenticated session and captures its CSRF token. */
-  async getSession(): Promise<ApiResponse<Session>> {
+  /** getSession loads the session and supports bounded startup cancellation. */
+  async getSession(signal?: AbortSignal): Promise<ApiResponse<Session>> {
     csrfToken = null;
-    const response = await request<Session>("/session");
+    const response = await request<Session>("/session", { signal });
     if (
       typeof response.data.csrfToken === "string" &&
       response.data.csrfToken !== ""

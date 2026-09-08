@@ -2,13 +2,18 @@
 
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 
 import App from "./App";
 
+beforeEach(() => {
+  window.history.replaceState(null, "", "/dev/api-bench");
+});
+
 afterEach(() => {
   cleanup();
+  window.history.replaceState(null, "", "/");
   vi.unstubAllGlobals();
 });
 
@@ -28,7 +33,7 @@ test("loads the health and session probes on startup", async () => {
 
   render(<App />);
 
-  expect(screen.getByRole("heading", { name: "API bench" })).toBeVisible();
+  expect(await screen.findByRole("heading", { name: "API bench" })).toBeVisible();
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   expect(screen.getByText(/"status": "ok"/)).toBeVisible();
 });

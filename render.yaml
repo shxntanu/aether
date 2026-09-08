@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: aether-api
+    runtime: go
+    plan: free
+    rootDir: backend
+    buildCommand: go build -trimpath -o bin/aether ./cmd/aether
+    startCommand: ./bin/aether
+    healthCheckPath: /api/v1/health
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: AETHER_HTTP_ADDRESS
+        value: 0.0.0.0:10000
+      - key: AETHER_STORAGE_PROVIDER
+        value: gdrive
+      - key: AETHER_SECURE_COOKIES
+        value: "true"
+      - key: AETHER_REQUEST_TIMEOUT
+        value: 30s
+      - key: AETHER_UPLOAD_TIMEOUT
+        value: 10m
+      - key: AETHER_SHUTDOWN_TIMEOUT
+        value: 10s
+      - key: AETHER_DATABASE_URL
+        sync: false
+      - key: AETHER_PUBLIC_URL
+        sync: false
+      - key: AETHER_GATEWAY_SECRET
+        sync: false
+      - key: AETHER_GDRIVE_CLIENT_ID
+        sync: false
+      - key: AETHER_GDRIVE_CLIENT_SECRET
+        sync: false
+      - key: AETHER_GDRIVE_REDIRECT_URL
+        sync: false
+      - key: AETHER_GDRIVE_FOLDER_ID
+        sync: false
+      - key: AETHER_GDRIVE_REFRESH_TOKEN
+        sync: false
+      - key: AETHER_GOOGLE_CLIENT_ID
+        sync: false
+      - key: AETHER_GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: AETHER_GOOGLE_REDIRECT_URL
+        sync: false
+      - key: AETHER_BOOTSTRAP_ADMIN_EMAIL
+        sync: false

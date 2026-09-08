@@ -79,19 +79,32 @@ func TestSessionResponseUsesPublicMemberFieldsOnly(t *testing.T) {
 func TestAdminCanAddAndDisableMember(t *testing.T) {
 	backend := &fakeIdentityBackend{member: activeMember(domain.MemberRoleAdmin)}
 	router := NewRouter(Options{Identity: backend, OIDC: backend})
+	const csrfToken = "csrf-token"
 
-	createRequest := httptest.NewRequest(http.MethodPost, "/api/v1/admin/members", strings.NewReader(`{"email":"Family@Example.com","role":"member"}`))
+	createRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/admin/members",
+		strings.NewReader(`{"email":"Family@Example.com","role":"member"}`),
+	)
 	createRequest.Header.Set("Content-Type", "application/json")
+	createRequest.Header.Set("X-CSRF-Token", csrfToken)
 	createRequest.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "admin"})
+	createRequest.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
 	createResponse := httptest.NewRecorder()
 	router.ServeHTTP(createResponse, createRequest)
 	if createResponse.Code != http.StatusCreated || backend.added.Email != "Family@Example.com" {
 		t.Fatalf("create response=%d body=%s added=%#v", createResponse.Code, createResponse.Body.String(), backend.added)
 	}
 
-	patchRequest := httptest.NewRequest(http.MethodPatch, "/api/v1/admin/members/member-1", strings.NewReader(`{"status":"disabled","role":"member"}`))
+	patchRequest := httptest.NewRequest(
+		http.MethodPatch,
+		"/api/v1/admin/members/member-1",
+		strings.NewReader(`{"status":"disabled","role":"member"}`),
+	)
 	patchRequest.Header.Set("Content-Type", "application/json")
+	patchRequest.Header.Set("X-CSRF-Token", csrfToken)
 	patchRequest.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "admin"})
+	patchRequest.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
 	patchResponse := httptest.NewRecorder()
 	router.ServeHTTP(patchResponse, patchRequest)
 	if patchResponse.Code != http.StatusOK || backend.updated.Status != domain.MemberStatusDisabled {
@@ -102,7 +115,10 @@ func TestAdminCanAddAndDisableMember(t *testing.T) {
 func TestLogoutDeletesServerSessionAndExpiresCookie(t *testing.T) {
 	backend := &fakeIdentityBackend{member: activeMember(domain.MemberRoleMember)}
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/logout", nil)
+	const csrfToken = "csrf-token"
+	request.Header.Set("X-CSRF-Token", csrfToken)
 	request.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "session-token"})
+	request.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: csrfToken})
 	response := httptest.NewRecorder()
 	NewRouter(Options{Identity: backend, OIDC: backend, SecureCookies: true}).ServeHTTP(response, request)
 	if response.Code != http.StatusNoContent || backend.loggedOut != "session-token" {
@@ -133,8 +149,24 @@ func (f *fakeIdentityBackend) Complete(_ context.Context, state, code string) (i
 func (f *fakeIdentityBackend) CompleteLogin(context.Context, identity.Identity) (string, domain.Member, error) {
 	return "session-token", f.member, nil
 }
+func (f *fakeIdentityBackend) CompleteLoginWithCSRF(
+	context.Context,
+	identity.Identity,
+) (string, domain.AuthenticatedSession, error) {
+	return "session-token", domain.AuthenticatedSession{
+		Member:    f.member,
+		CSRFToken: "csrf-token",
+	}, nil
+}
 func (f *fakeIdentityBackend) Authenticate(context.Context, string) (domain.Member, error) {
 	return f.member, f.authErr
+}
+func (f *fakeIdentityBackend) AuthenticateWithCSRF(
+	context.Context,
+	string,
+	string,
+) (domain.AuthenticatedSession, error) {
+	return domain.AuthenticatedSession{Member: f.member, CSRFToken: "csrf-token"}, f.authErr
 }
 func (f *fakeIdentityBackend) Logout(_ context.Context, token string) error {
 	f.loggedOut = token
@@ -147,9 +179,26 @@ func (f *fakeIdentityBackend) AddMember(_ context.Context, email string, role do
 	f.added = domain.Member{Email: email, Role: role, Status: domain.MemberStatusActive}
 	return f.added, nil
 }
+func (f *fakeIdentityBackend) AddMemberWithActor(
+	ctx context.Context,
+	_ domain.MemberID,
+	email string,
+	role domain.MemberRole,
+) (domain.Member, error) {
+	return f.AddMember(ctx, email, role)
+}
 func (f *fakeIdentityBackend) ChangeMember(_ context.Context, id domain.MemberID, role domain.MemberRole, status domain.MemberStatus) (domain.Member, error) {
 	f.updated = domain.Member{ID: id, Role: role, Status: status}
 	return f.updated, nil
+}
+func (f *fakeIdentityBackend) ChangeMemberWithActor(
+	ctx context.Context,
+	_ domain.MemberID,
+	id domain.MemberID,
+	role domain.MemberRole,
+	status domain.MemberStatus,
+) (domain.Member, error) {
+	return f.ChangeMember(ctx, id, role, status)
 }
 
 func activeMember(role domain.MemberRole) domain.Member {

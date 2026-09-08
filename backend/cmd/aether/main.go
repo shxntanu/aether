@@ -98,6 +98,7 @@ func main() {
 		Logger:             logger,
 		Audit:              auditRecorder,
 	})
+	router = httpapi.Gateway(router, settings.GatewaySecret)
 	logger.Printf("Aether API listening on %s", listener.Addr())
 	if err := server.Serve(ctx, listener, router, settings.ShutdownTimeout); err != nil {
 		logger.Fatalf("serve HTTP: %v", err)

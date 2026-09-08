@@ -26,6 +26,9 @@ type Config struct {
 	UploadTimeout time.Duration
 	// DatabaseURL is the PostgreSQL connection string.
 	DatabaseURL string
+	// GatewaySecret authenticates requests arriving from the trusted edge. An
+	// empty value keeps direct local development available.
+	GatewaySecret string
 	// StorageProvider selects the provider package wired at startup.
 	StorageProvider string
 	// LocalStoragePath is the persistent root used by the local provider.
@@ -70,6 +73,10 @@ func Load() (Config, error) {
 	}
 	if value := os.Getenv("AETHER_DATABASE_URL"); value != "" {
 		config.DatabaseURL = value
+	}
+	config.GatewaySecret = os.Getenv("AETHER_GATEWAY_SECRET")
+	if config.GatewaySecret != "" && len([]byte(config.GatewaySecret)) < 32 {
+		return Config{}, fmt.Errorf("AETHER_GATEWAY_SECRET must be at least 32 bytes")
 	}
 	publicURL, err := parsePublicURL(os.Getenv("AETHER_PUBLIC_URL"))
 	if err != nil {

@@ -8,6 +8,7 @@ import {
   type StorageUsage,
   type Tag,
 } from "@/lib/api";
+import { loadInitialSession } from "@/lib/initial-session";
 import {
   getDocumentIdFromPath,
   getErrorMessage,
@@ -36,7 +37,7 @@ import "./VaultApp.css";
 export default function VaultApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [sessionState, setSessionState] = useState<
-    "loading" | "ready" | "signed-out" | "disabled" | "error"
+    "loading" | "waking" | "ready" | "signed-out" | "disabled" | "error"
   >("loading");
   const [route, setRoute] = useState<RouteName>(() =>
     getRoute(window.location.pathname),
@@ -120,13 +121,17 @@ export default function VaultApp() {
   }, [session]);
 
   useEffect(() => {
-    void api
-      .getSession()
+    const controller = new AbortController();
+    void loadInitialSession((signal) => api.getSession(signal), {
+      signal: controller.signal,
+      onTransientFailure: () => setSessionState("waking"),
+    })
       .then((next) => {
         setSession(next.data);
         setSessionState("ready");
       })
       .catch((requestError: unknown) => {
+        if (controller.signal.aborted) return;
         const status =
           requestError &&
           typeof requestError === "object" &&
@@ -141,6 +146,7 @@ export default function VaultApp() {
           setSessionState("error");
         }
       });
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -253,12 +259,14 @@ export default function VaultApp() {
     navigate(`/documents/${encodeURIComponent(id)}`);
   };
 
-  if (sessionState === "loading")
+  if (sessionState === "loading" || sessionState === "waking")
     return (
       <main className="vault-login">
         <section className="vault-login__sheet">
           <Brand />
-          <p>Opening your archive…</p>
+          <p role="status" aria-live="polite">
+            {sessionState === "waking" ? "Waking vault…" : "Opening your archive…"}
+          </p>
         </section>
       </main>
     );

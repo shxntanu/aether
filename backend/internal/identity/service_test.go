@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shxntanu/aether/backend/internal/audit"
 	"github.com/shxntanu/aether/backend/internal/domain"
 )
 
@@ -106,7 +107,12 @@ func TestAuthenticateEnforcesSessionExpiryAndCurrentMembershipStatus(t *testing.
 
 func TestMemberManagementValidatesRolesStatusesAndNormalizesEmail(t *testing.T) {
 	repository := newMemoryRepository()
-	service := NewService(repository, time.Now, sequenceSecrets("member-id"))
+	service := NewService(
+		repository,
+		time.Now,
+		sequenceSecrets("member-id"),
+		discardAuditRecorder{},
+	)
 	member, err := service.AddMember(context.Background(), " Family@Example.com ", domain.MemberRoleMember)
 	if err != nil {
 		t.Fatalf("AddMember() error = %v", err)
@@ -129,6 +135,12 @@ func TestMemberManagementValidatesRolesStatusesAndNormalizesEmail(t *testing.T) 
 	if _, err := service.ChangeMember(context.Background(), member.ID, domain.MemberRoleMember, domain.MemberStatus("pending")); err == nil {
 		t.Fatal("ChangeMember() accepted invalid status")
 	}
+}
+
+type discardAuditRecorder struct{}
+
+func (discardAuditRecorder) Record(context.Context, audit.Event) error {
+	return nil
 }
 
 func TestLogoutDeletesHashedSessionToken(t *testing.T) {

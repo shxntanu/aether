@@ -128,6 +128,100 @@ func TestDocumentFiltersPurgeAndUploadClaims(t *testing.T) {
 	}
 }
 
+func TestSupabaseBrowserRolesCannotAccessAetherTables(t *testing.T) {
+	dataSourceName := os.Getenv("AETHER_TEST_POSTGRES_URL")
+	if dataSourceName == "" {
+		t.Skip("AETHER_TEST_POSTGRES_URL is not set")
+	}
+
+	store, err := Open(context.Background(), dataSourceName)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	tables := []string{
+		"schema_migrations_tbl",
+		"members_tbl",
+		"documents_tbl",
+		"tags_tbl",
+		"document_tags_tbl",
+		"audit_events_tbl",
+		"sessions_tbl",
+		"auth_flows_tbl",
+		"upload_requests_tbl",
+	}
+	for _, table := range tables {
+		var rowSecurity bool
+		err := store.db.QueryRowContext(
+			context.Background(),
+			"SELECT relrowsecurity FROM pg_class WHERE oid = $1::regclass",
+			"public."+table,
+		).Scan(&rowSecurity)
+		if err != nil || !rowSecurity {
+			t.Errorf("RLS for %s = %t, %v; want enabled", table, rowSecurity, err)
+		}
+	}
+
+	for _, role := range []string{"anon", "authenticated"} {
+		t.Run(role, func(t *testing.T) {
+			var exists bool
+			if err := store.db.QueryRowContext(
+				context.Background(),
+				"SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1)",
+				role,
+			).Scan(&exists); err != nil {
+				t.Fatalf("check role: %v", err)
+			}
+			if !exists {
+				t.Skipf("PostgreSQL role %q is not configured", role)
+			}
+			assertRoleHasNoTableAccess(t, store, role, tables)
+		})
+	}
+}
+
+func assertRoleHasNoTableAccess(
+	t *testing.T,
+	store *Store,
+	role string,
+	tables []string,
+) {
+	t.Helper()
+	for _, table := range tables {
+		transaction, err := store.db.BeginTx(context.Background(), nil)
+		if err != nil {
+			t.Fatalf("begin role check: %v", err)
+		}
+		if _, err := transaction.ExecContext(
+			context.Background(),
+			"SELECT set_config('role', $1, true)",
+			role,
+		); err != nil {
+			_ = transaction.Rollback()
+			t.Fatalf("assume role %q: %v", role, err)
+		}
+		for _, privilege := range []string{"SELECT", "INSERT", "UPDATE", "DELETE"} {
+			var allowed bool
+			if err := transaction.QueryRowContext(
+				context.Background(),
+				"SELECT has_table_privilege(current_user, $1, $2)",
+				"public."+table,
+				privilege,
+			).Scan(&allowed); err != nil {
+				_ = transaction.Rollback()
+				t.Fatalf("check %s on %s as %s: %v", privilege, table, role, err)
+			}
+			if allowed {
+				t.Errorf("role %s retains %s on %s", role, privilege, table)
+			}
+		}
+		if err := transaction.Rollback(); err != nil {
+			t.Fatalf("rollback role check: %v", err)
+		}
+	}
+}
+
 func postgresDocumentFixture(id domain.DocumentID, uploaderID domain.MemberID) domain.Document {
 	createdAt := time.Date(2026, time.August, 31, 1, 30, 0, 0, time.UTC)
 	return domain.Document{

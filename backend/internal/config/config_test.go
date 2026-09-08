@@ -12,6 +12,7 @@ func TestLoadUsesDevelopmentDefaults(t *testing.T) {
 	t.Setenv("AETHER_DATABASE_URL", "")
 	t.Setenv("AETHER_STORAGE_PROVIDER", "")
 	t.Setenv("AETHER_LOCAL_STORAGE_PATH", "")
+	t.Setenv("AETHER_GATEWAY_SECRET", "")
 	clearIdentityEnvironment(t)
 	clearDriveEnvironment(t)
 
@@ -47,6 +48,8 @@ func TestLoadUsesEnvironmentOverrides(t *testing.T) {
 	t.Setenv("AETHER_GOOGLE_REDIRECT_URL", "https://vault.example/auth/google/callback")
 	t.Setenv("AETHER_BOOTSTRAP_ADMIN_EMAIL", "admin@example.com")
 	t.Setenv("AETHER_SECURE_COOKIES", "true")
+	t.Setenv("AETHER_PUBLIC_URL", "https://vault.example")
+	t.Setenv("AETHER_GATEWAY_SECRET", "01234567890123456789012345678901")
 
 	got, err := Load()
 	if err != nil {
@@ -67,6 +70,18 @@ func TestLoadUsesEnvironmentOverrides(t *testing.T) {
 	}
 	if got.GoogleClientID != "client-id" || got.GoogleRedirectURL != "https://vault.example/auth/google/callback" || !got.SecureCookies {
 		t.Fatalf("identity configuration = %#v", got)
+	}
+	if got.GatewaySecret != "01234567890123456789012345678901" {
+		t.Fatalf("GatewaySecret was not loaded")
+	}
+}
+
+func TestLoadRejectsShortGatewaySecret(t *testing.T) {
+	t.Setenv("AETHER_GATEWAY_SECRET", "too-short")
+
+	_, err := Load()
+	if err == nil || !strings.Contains(err.Error(), "AETHER_GATEWAY_SECRET") {
+		t.Fatalf("Load() error = %v, want gateway secret validation", err)
 	}
 }
 

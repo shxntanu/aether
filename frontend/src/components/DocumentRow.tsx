@@ -16,6 +16,8 @@ export function DocumentRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const contributorName = item.uploaderName || "Unknown contributor";
+
   return (
     <div
       className="vault-row"
@@ -56,10 +58,13 @@ export function DocumentRow({
           )}
         </div>
       </div>
-      <div className="vault-cell vault-cell--muted">
-        {item.document.uploaderId}
-        <br />
-        {formatDate(item.document.updatedAt)}
+      <div className="vault-cell vault-cell--muted vault-cell--contributor">
+        <span className="vault-contributor__name" title={contributorName}>
+          {contributorName}
+        </span>
+        <span className="vault-contributor__date">
+          {formatDate(item.document.updatedAt)}
+        </span>
       </div>
       <div className="vault-cell vault-cell--size">
         {formatBytes(item.document.sizeBytes)}

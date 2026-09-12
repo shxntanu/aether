@@ -16,6 +16,7 @@ func TestDeleteQueuesStorageWorkAndReturnsCurrentRecord(t *testing.T) {
 		Title:      "Passport",
 		StorageKey: "documents/document-1/original",
 		Status:     domain.DocumentStatusReady,
+		UploaderID: "member-1",
 		Version:    1,
 		CreatedAt:  now,
 		UpdatedAt:  now,
@@ -90,6 +91,16 @@ func (r *deletionRepository) ListDocumentTags(
 	domain.DocumentID,
 ) ([]domain.Tag, error) {
 	return []domain.Tag{}, nil
+}
+
+func (r *deletionRepository) GetMember(
+	_ context.Context,
+	id domain.MemberID,
+) (domain.Member, error) {
+	if id != r.document.UploaderID {
+		return domain.Member{}, domain.ErrNotFound
+	}
+	return domain.Member{ID: id, DisplayName: "Family Member"}, nil
 }
 
 type deletionObjectStore struct {

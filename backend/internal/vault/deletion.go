@@ -114,7 +114,7 @@ func (s *Service) Restore(ctx context.Context, id domain.DocumentID) (DocumentRe
 		return DocumentRecord{}, err
 	}
 	updated = s.writeManifest(ctx, updated, tags)
-	return DocumentRecord{Document: updated, Tags: tags}, nil
+	return s.withUploaderName(ctx, DocumentRecord{Document: updated, Tags: tags})
 }
 
 // Purge permanently removes a deleted document's objects and then its
@@ -229,7 +229,7 @@ func (s *Service) deletedRecord(
 	if err != nil {
 		return DocumentRecord{}, err
 	}
-	return DocumentRecord{Document: document, Tags: tags}, nil
+	return s.withUploaderName(ctx, DocumentRecord{Document: document, Tags: tags})
 }
 
 // PurgeDue permanently purges at most 100 due deleted documents. It attempts

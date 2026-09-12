@@ -202,4 +202,4 @@ make the next document easy to find, and communicate lifecycle state honestly.
 
 ## License
 
-No public license has been selected yet.
+MIT

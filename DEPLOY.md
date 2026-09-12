@@ -208,6 +208,8 @@ role; do not use an `anon` or `authenticated` JWT role.
 Click the `Connect` button on the Supabase project and choose the "Connection String" option, and
 copy the value from the `.env` section.
 
+![Supabase Connection String](./assets/docs/supabase-1.png)
+
 The Render connection string must include TLS, for example:
 
 ```text

@@ -16,6 +16,7 @@ func (s *Store) CreateTag(ctx context.Context, tag domain.Tag) error {
 		ID:             tag.ID,
 		DisplayName:    tag.DisplayName,
 		NormalizedName: tag.NormalizedName,
+		Implicit:       tag.Implicit,
 	}
 	err := s.orm.WithContext(ctx).Create(&model).Error
 	return translateError("create tag", err)
@@ -98,6 +99,7 @@ func (s *Store) ListTags(ctx context.Context, query string, limit int) ([]domain
 			ID:             model.ID,
 			DisplayName:    model.DisplayName,
 			NormalizedName: model.NormalizedName,
+			Implicit:       model.Implicit,
 		})
 	}
 	return tags, nil
@@ -128,6 +130,25 @@ func (s *Store) GetTagByNormalizedName(
 		ID:             model.ID,
 		DisplayName:    model.DisplayName,
 		NormalizedName: model.NormalizedName,
+		Implicit:       model.Implicit,
+	}, nil
+}
+
+// GetTag returns a reusable or implicit tag by ID.
+func (s *Store) GetTag(ctx context.Context, id domain.TagID) (domain.Tag, error) {
+	var model tagModel
+	err := s.orm.WithContext(ctx).Where("id = ?", id).First(&model).Error
+	if isRecordNotFound(err) {
+		return domain.Tag{}, fmt.Errorf("get tag %q: %w", id, domain.ErrNotFound)
+	}
+	if err != nil {
+		return domain.Tag{}, fmt.Errorf("get tag %q: %w", id, err)
+	}
+	return domain.Tag{
+		ID:             model.ID,
+		DisplayName:    model.DisplayName,
+		NormalizedName: model.NormalizedName,
+		Implicit:       model.Implicit,
 	}, nil
 }
 
@@ -158,13 +179,13 @@ func (s *Store) ListDocumentTags(
 	if err != nil {
 		return nil, fmt.Errorf("list document tags: %w", err)
 	}
-
 	tags := make([]domain.Tag, 0, len(models))
 	for _, model := range models {
 		tags = append(tags, domain.Tag{
 			ID:             model.ID,
 			DisplayName:    model.DisplayName,
 			NormalizedName: model.NormalizedName,
+			Implicit:       model.Implicit,
 		})
 	}
 	return tags, nil

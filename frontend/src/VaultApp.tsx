@@ -1,6 +1,5 @@
 import { CircleAlert, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-
 import {
   api,
   type Member,
@@ -9,10 +8,12 @@ import {
   type Tag,
 } from "@/lib/api";
 import { loadInitialSession } from "@/lib/initial-session";
+
 import {
   getDocumentIdFromPath,
   getErrorMessage,
   getRoute,
+  isImplicitDateTag,
   navigate,
   type DocumentItem,
   type RouteName,
@@ -179,11 +180,16 @@ export default function VaultApp() {
     return () => window.clearInterval(timer);
   }, [documents, refreshDeletedDocuments]);
 
-  const updateMetadata = async (title: string, nextTags: string[]) => {
+  const updateMetadata = async (
+    title: string,
+    nextTags: string[],
+    date: string,
+  ) => {
     if (!selected) return;
     const result = await api.updateMetadata(selected.document.id, {
       title,
       tags: nextTags,
+      date,
       version: selected.document.version,
     });
     const updated: DocumentItem = result.data;
@@ -280,12 +286,14 @@ export default function VaultApp() {
     );
   }
   if (!session) return <SignedOut />;
+  const reusableTags = tags.filter((tag) => !isImplicitDateTag(tag));
 
   const isWorkspace = route === "library" || route === "recent";
   return (
     <div className="vault-app">
       <TopBar
         session={session}
+        tags={tags}
         onMenu={() => setNavOpen((current) => !current)}
         navOpen={navOpen}
         onOpenDocument={(record) => {
@@ -304,7 +312,7 @@ export default function VaultApp() {
         <Navigation
           session={session}
           documents={documents}
-          tags={tags}
+          tags={reusableTags}
           storageUsage={storageUsage}
           storageUsageState={storageUsageState}
           open={navOpen}
@@ -346,7 +354,7 @@ export default function VaultApp() {
           )}
           {route === "tags" && (
             <TagsPage
-              tags={tags}
+              tags={reusableTags}
               documents={documents}
               onOpenTag={(tag) => {
                 setQuery(tag.displayName);

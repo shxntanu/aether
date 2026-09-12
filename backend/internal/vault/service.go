@@ -26,6 +26,9 @@ const (
 	maxTagLength          = 100
 	maxTitleLength        = 500
 )
+const documentDateLayout = "2006-01-02"
+
+var indiaStandardTime = time.FixedZone("IST", 5*60*60+30*60)
 
 var (
 	// ErrUnsupportedMediaType indicates that file signatures do not identify
@@ -57,6 +60,16 @@ type searchRepository interface {
 	) ([]domain.DocumentSearchResult, error)
 }
 
+type filteredSearchRepository interface {
+	SearchDocumentsWithFilters(
+		context.Context,
+		string,
+		[]string,
+		domain.TagMatch,
+		int,
+	) ([]domain.DocumentSearchResult, error)
+}
+
 // Service coordinates catalog records, immutable objects, and manifests.
 type Service struct {
 	repository Repository
@@ -66,12 +79,15 @@ type Service struct {
 	recorder   audit.Recorder
 }
 
-// DocumentRecord combines catalog metadata with its reusable tags.
+// DocumentRecord combines catalog metadata with its implicit date and reusable tags.
 type DocumentRecord struct {
 	// Document is the public catalog metadata.
 	Document domain.Document `json:"document"`
-	// Tags contains the document's reusable tags.
+	// Tags contains reusable tags and the document's implicit date tag.
 	Tags []domain.Tag `json:"tags"`
+
+	// UploaderName is the human-readable name of the contributing member.
+	UploaderName string `json:"uploaderName"`
 }
 
 // DocumentSearchResult combines a ranked document record with typed visible
@@ -83,6 +99,8 @@ type DocumentSearchResult struct {
 	Tags []domain.Tag `json:"tags"`
 	// Evidence identifies matched titles, filenames, or tags.
 	Evidence []domain.DocumentSearchEvidence `json:"evidence"`
+	// UploaderName is the human-readable name of the contributing member.
+	UploaderName string `json:"uploaderName"`
 }
 
 // Upload describes a streamed original document and optional metadata.
@@ -105,8 +123,11 @@ type Upload struct {
 type MetadataUpdate struct {
 	// Title is the new non-empty display title.
 	Title string
-	// Tags completely replaces current tag associations.
+	// Tags completely replaces current reusable tag associations.
 	Tags []string
+	// Date is the implicit document date in YYYY-MM-DD format. An empty value
+	// preserves the current date for compatibility with older clients.
+	Date string
 	// ExpectedVersion must match the current catalog version.
 	ExpectedVersion int64
 	// ActorID identifies the member changing the metadata, when known.
@@ -144,7 +165,7 @@ func NewService(
 	}
 }
 
-// Upload stores an original document, optional tags, and a versioned manifest.
+// Upload stores an original, optional reusable tags, and an implicit IST date tag.
 func (s *Service) Upload(ctx context.Context, input Upload) (DocumentRecord, error) {
 	filename := filepath.Base(strings.ReplaceAll(strings.TrimSpace(input.Filename), "\\", "/"))
 	idempotencyKey := strings.TrimSpace(input.IdempotencyKey)
@@ -160,7 +181,7 @@ func (s *Service) Upload(ctx context.Context, input Upload) (DocumentRecord, err
 	if title == "" || len(title) > maxTitleLength || !validDisplayText(title) {
 		return DocumentRecord{}, ErrInvalidMetadata
 	}
-	if err := validateTagNames(input.Tags); err != nil {
+	if err := validateReusableTagNames(input.Tags); err != nil {
 		return DocumentRecord{}, err
 	}
 
@@ -180,6 +201,7 @@ func (s *Service) Upload(ctx context.Context, input Upload) (DocumentRecord, err
 		return DocumentRecord{}, err
 	}
 	now := s.now().UTC()
+	uploadDate := implicitDateTagName(now)
 	document := domain.Document{
 		ID:               domain.DocumentID(id),
 		Title:            title,
@@ -251,7 +273,13 @@ func (s *Service) Upload(ctx context.Context, input Upload) (DocumentRecord, err
 		if err != nil {
 			return err
 		}
-		tags, err = s.resolveAndReplaceTags(ctx, transaction, document.ID, input.Tags)
+		tags, err = s.resolveAndReplaceTags(
+			ctx,
+			transaction,
+			document.ID,
+			input.Tags,
+			uploadDate,
+		)
 		return err
 	})
 	if err != nil {
@@ -269,7 +297,7 @@ func (s *Service) Upload(ctx context.Context, input Upload) (DocumentRecord, err
 	); err != nil {
 		return DocumentRecord{}, fmt.Errorf("record document upload: %w", err)
 	}
-	return DocumentRecord{Document: document, Tags: tags}, nil
+	return s.withUploaderName(ctx, DocumentRecord{Document: document, Tags: tags})
 }
 
 // Get returns one ready document and its tags.
@@ -285,7 +313,7 @@ func (s *Service) Get(ctx context.Context, id domain.DocumentID) (DocumentRecord
 	if err != nil {
 		return DocumentRecord{}, err
 	}
-	return DocumentRecord{Document: document, Tags: tags}, nil
+	return s.withUploaderName(ctx, DocumentRecord{Document: document, Tags: tags})
 }
 
 // List returns ready documents matching all or any normalized tag names.
@@ -317,7 +345,14 @@ func (s *Service) List(
 		if err != nil {
 			return nil, err
 		}
-		records = append(records, DocumentRecord{Document: document, Tags: documentTags})
+		record, recordErr := s.withUploaderName(
+			ctx,
+			DocumentRecord{Document: document, Tags: documentTags},
+		)
+		if recordErr != nil {
+			return nil, recordErr
+		}
+		records = append(records, record)
 	}
 	return records, nil
 }
@@ -327,6 +362,28 @@ func (s *Service) List(
 func (s *Service) Search(
 	ctx context.Context,
 	query string,
+	limit int,
+) ([]DocumentSearchResult, error) {
+	return s.searchWithFilters(ctx, query, nil, domain.TagMatchAll, limit)
+}
+
+// SearchWithFilters combines fuzzy metadata search with an all- or any-tag
+// filter. Empty tags preserve the recent-document behavior of Search.
+func (s *Service) SearchWithFilters(
+	ctx context.Context,
+	query string,
+	tags []string,
+	match domain.TagMatch,
+	limit int,
+) ([]DocumentSearchResult, error) {
+	return s.searchWithFilters(ctx, query, tags, match, limit)
+}
+
+func (s *Service) searchWithFilters(
+	ctx context.Context,
+	query string,
+	tags []string,
+	match domain.TagMatch,
 	limit int,
 ) ([]DocumentSearchResult, error) {
 	normalizedQuery := strings.TrimSpace(query)
@@ -340,20 +397,50 @@ func (s *Service) Search(
 	if limit > 20 {
 		limit = 20
 	}
-	repository, ok := s.repository.(searchRepository)
-	if !ok {
-		return nil, errors.New("document search is not configured")
+	if match == "" {
+		match = domain.TagMatchAll
 	}
-	results, err := repository.SearchDocuments(ctx, normalizedQuery, limit)
+	if match != domain.TagMatchAll && match != domain.TagMatchAny {
+		return nil, ErrInvalidMetadata
+	}
+	normalizedTags, err := normalizeTagFilters(tags)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []domain.DocumentSearchResult
+	if repository, ok := s.repository.(filteredSearchRepository); ok {
+		results, err = repository.SearchDocumentsWithFilters(
+			ctx,
+			normalizedQuery,
+			normalizedTags,
+			match,
+			limit,
+		)
+	} else {
+		if len(normalizedTags) > 0 {
+			return nil, errors.New("filtered document search is not configured")
+		}
+		repository, ok := s.repository.(searchRepository)
+		if !ok {
+			return nil, errors.New("document search is not configured")
+		}
+		results, err = repository.SearchDocuments(ctx, normalizedQuery, limit)
+	}
 	if err != nil {
 		return nil, err
 	}
 	searchResults := make([]DocumentSearchResult, len(results))
 	for index, result := range results {
+		uploaderName, nameErr := s.uploaderName(ctx, result.Document.UploaderID)
+		if nameErr != nil {
+			return nil, nameErr
+		}
 		searchResults[index] = DocumentSearchResult{
-			Document: result.Document,
-			Tags:     result.Tags,
-			Evidence: result.Evidence,
+			Document:     result.Document,
+			Tags:         result.Tags,
+			Evidence:     result.Evidence,
+			UploaderName: uploaderName,
 		}
 	}
 	return searchResults, nil
@@ -405,12 +492,18 @@ func (s *Service) UpdateMetadata(
 		input.ExpectedVersion <= 0 {
 		return DocumentRecord{}, ErrInvalidMetadata
 	}
-	if err := validateTagNames(input.Tags); err != nil {
+	reusableTags := stripImplicitDateTags(input.Tags)
+	if err := validateReusableTagNames(reusableTags); err != nil {
 		return DocumentRecord{}, err
 	}
+	requestedDate, err := normalizeOptionalDocumentDate(input.Date)
+	if err != nil {
+		return DocumentRecord{}, err
+	}
+	now := s.now().UTC()
 	var document domain.Document
 	var tags []domain.Tag
-	err := s.repository.WithinTransaction(ctx, func(transaction domain.Repository) error {
+	err = s.repository.WithinTransaction(ctx, func(transaction domain.Repository) error {
 		var transactionErr error
 		document, transactionErr = transaction.GetDocument(ctx, id)
 		if transactionErr != nil {
@@ -419,9 +512,20 @@ func (s *Service) UpdateMetadata(
 		if document.Status != domain.DocumentStatusReady {
 			return domain.ErrNotFound
 		}
+		existingTags, transactionErr := transaction.ListDocumentTags(ctx, id)
+		if transactionErr != nil {
+			return transactionErr
+		}
+		documentDate := requestedDate
+		if documentDate == "" {
+			documentDate = implicitDateFromTags(existingTags)
+		}
+		if documentDate == "" {
+			documentDate = implicitDateTagName(now)
+		}
 		document.Title = title
 		document.ManifestError = ""
-		document.UpdatedAt = s.now().UTC()
+		document.UpdatedAt = now
 		document, transactionErr = transaction.UpdateDocument(
 			ctx,
 			document,
@@ -434,7 +538,8 @@ func (s *Service) UpdateMetadata(
 			ctx,
 			transaction,
 			id,
-			input.Tags,
+			reusableTags,
+			documentDate,
 		)
 		return transactionErr
 	})
@@ -450,7 +555,34 @@ func (s *Service) UpdateMetadata(
 	); err != nil {
 		return DocumentRecord{}, fmt.Errorf("record document metadata edit: %w", err)
 	}
-	return DocumentRecord{Document: document, Tags: tags}, nil
+	return s.withUploaderName(ctx, DocumentRecord{Document: document, Tags: tags})
+}
+
+func (s *Service) withUploaderName(
+	ctx context.Context,
+	record DocumentRecord,
+) (DocumentRecord, error) {
+	uploaderName, err := s.uploaderName(ctx, record.Document.UploaderID)
+	if err != nil {
+		return DocumentRecord{}, err
+	}
+	record.UploaderName = uploaderName
+	return record, nil
+}
+
+func (s *Service) uploaderName(
+	ctx context.Context,
+	id domain.MemberID,
+) (string, error) {
+	member, err := s.repository.GetMember(ctx, id)
+	if err != nil {
+		return "", fmt.Errorf("get uploader %q: %w", id, err)
+	}
+	name := strings.TrimSpace(member.DisplayName)
+	if name == "" {
+		return "Unknown contributor", nil
+	}
+	return name, nil
 }
 
 // ListTags returns reusable tags for autocomplete.
@@ -463,7 +595,7 @@ func (s *Service) ListTags(ctx context.Context, query string, limit int) ([]doma
 
 // CreateTag creates or returns a reusable tag with case-insensitive identity.
 func (s *Service) CreateTag(ctx context.Context, name string) (domain.Tag, error) {
-	if err := validateTagNames([]string{name}); err != nil {
+	if err := validateReusableTagNames([]string{name}); err != nil {
 		return domain.Tag{}, err
 	}
 	tag, _ := domain.NewTag("", name)
@@ -494,7 +626,14 @@ func (s *Service) UpdateTag(
 	id domain.TagID,
 	name string,
 ) (domain.Tag, error) {
-	if id == "" || validateTagNames([]string{name}) != nil {
+	if id == "" || validateReusableTagNames([]string{name}) != nil {
+		return domain.Tag{}, ErrInvalidMetadata
+	}
+	current, err := s.repository.GetTag(ctx, id)
+	if err != nil {
+		return domain.Tag{}, err
+	}
+	if current.Implicit {
 		return domain.Tag{}, ErrInvalidMetadata
 	}
 	tag, _ := domain.NewTag(id, name)
@@ -504,6 +643,13 @@ func (s *Service) UpdateTag(
 // DeleteTag removes a reusable tag and all of its document associations.
 func (s *Service) DeleteTag(ctx context.Context, id domain.TagID) error {
 	if id == "" {
+		return ErrInvalidMetadata
+	}
+	tag, err := s.repository.GetTag(ctx, id)
+	if err != nil {
+		return err
+	}
+	if tag.Implicit {
 		return ErrInvalidMetadata
 	}
 	return s.repository.DeleteTag(ctx, id)
@@ -710,10 +856,19 @@ func (s *Service) resolveAndReplaceTags(
 	repository domain.Repository,
 	documentID domain.DocumentID,
 	names []string,
+	documentDate string,
 ) ([]domain.Tag, error) {
-	tags := make([]domain.Tag, 0, len(names))
-	seen := make(map[string]struct{}, len(names))
-	for _, name := range names {
+	normalizedDate, err := normalizeDocumentDate(documentDate)
+	if err != nil {
+		return nil, err
+	}
+	namesWithDate := make([]string, 0, len(names)+1)
+	namesWithDate = append(namesWithDate, names...)
+	namesWithDate = append(namesWithDate, normalizedDate)
+
+	tags := make([]domain.Tag, 0, len(namesWithDate))
+	seen := make(map[string]struct{}, len(namesWithDate))
+	for index, name := range namesWithDate {
 		tag, err := domain.NewTag("", name)
 		if err != nil {
 			return nil, ErrInvalidMetadata
@@ -722,6 +877,7 @@ func (s *Service) resolveAndReplaceTags(
 			continue
 		}
 		seen[tag.NormalizedName] = struct{}{}
+		implicit := index == len(namesWithDate)-1
 		existing, err := repository.GetTagByNormalizedName(ctx, tag.NormalizedName)
 		if errors.Is(err, domain.ErrNotFound) {
 			id, idErr := s.newID()
@@ -729,6 +885,7 @@ func (s *Service) resolveAndReplaceTags(
 				return nil, idErr
 			}
 			tag.ID = domain.TagID(id)
+			tag.Implicit = implicit
 			if createErr := repository.CreateTag(ctx, tag); createErr != nil {
 				if !errors.Is(createErr, domain.ErrAlreadyExists) {
 					return nil, createErr
@@ -821,6 +978,57 @@ func validateTagNames(names []string) error {
 		}
 	}
 	return nil
+}
+func validateReusableTagNames(names []string) error {
+	if err := validateTagNames(names); err != nil {
+		return err
+	}
+	for _, name := range names {
+		if _, err := normalizeDocumentDate(name); err == nil {
+			return ErrInvalidMetadata
+		}
+	}
+	return nil
+}
+
+func implicitDateTagName(at time.Time) string {
+	return at.In(indiaStandardTime).Format(documentDateLayout)
+}
+
+func normalizeOptionalDocumentDate(value string) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", nil
+	}
+	return normalizeDocumentDate(value)
+}
+
+func normalizeDocumentDate(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	parsed, err := time.ParseInLocation(documentDateLayout, value, indiaStandardTime)
+	if err != nil || parsed.Format(documentDateLayout) != value {
+		return "", ErrInvalidMetadata
+	}
+	return value, nil
+}
+
+func implicitDateFromTags(tags []domain.Tag) string {
+	for _, tag := range tags {
+		if date, err := normalizeDocumentDate(tag.DisplayName); err == nil {
+			return date
+		}
+	}
+	return ""
+}
+
+func stripImplicitDateTags(names []string) []string {
+	filtered := make([]string, 0, len(names))
+	for _, name := range names {
+		if _, err := normalizeDocumentDate(name); err == nil {
+			continue
+		}
+		filtered = append(filtered, name)
+	}
+	return filtered
 }
 
 func validDisplayText(value string) bool {

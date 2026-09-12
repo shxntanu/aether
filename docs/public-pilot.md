@@ -49,7 +49,8 @@ Safe `GET` requests do not require the CSRF header.
 | --- | --- | --- |
 | Session | `GET /api/v1/session` | Authenticated active member; no CSRF header. |
 | Logout | `POST /api/v1/logout` | Authenticated member and valid CSRF token; invalidates the server-side session and expires cookies. |
-| Documents | `POST /api/v1/documents`, `GET /api/v1/documents`, `GET /api/v1/documents/{id}`, `PATCH /api/v1/documents/{id}`, `GET /api/v1/documents/{id}/content` | Authenticated active member. `POST`/`PATCH` require CSRF; `GET` operations do not. Uploads retain the existing 50 MiB and supported-format constraints. |
+| Documents | `POST /api/v1/documents`, `GET /api/v1/documents`, `GET /api/v1/documents/{id}`, `PATCH /api/v1/documents/{id}`, `GET /api/v1/documents/{id}/content` | Authenticated active member. `POST`/`PATCH` require CSRF; `GET` operations do not. Uploads retain the existing 50 MiB and supported-format constraints; successful uploads receive an implicit IST date tag, and `PATCH` accepts an editable `YYYY-MM-DD` date. |
+| Search | `GET /api/v1/search` | Authenticated active member; supports fuzzy `q` plus repeated exact `tag` filters and `match=all` or `match=any`. |
 | Soft delete | `DELETE /api/v1/documents/{id}` | Authenticated active member and valid CSRF token. Idempotently trashes the original and manifest and starts the 30-day retention period. |
 | Restore | `POST /api/v1/documents/{id}/restore` | Authenticated administrator and valid CSRF token. Restores both stored objects before returning the document to `ready`. |
 | Purge | `DELETE /api/v1/documents/{id}/purge` | Authenticated administrator and valid CSRF token. Irreversibly removes a document only after its 30-day retention period. |

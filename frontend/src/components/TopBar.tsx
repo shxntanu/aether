@@ -1,7 +1,7 @@
 import { LogOut, Menu, Search, Upload, X } from "lucide-react";
 import { useState } from "react";
 
-import type { DocumentRecord, Session } from "@/lib/api";
+import type { DocumentRecord, Session, Tag } from "@/lib/api";
 
 import { Brand } from "@/components/Brand";
 import { DocumentSearchPalette } from "@/components/DocumentSearchPalette";
@@ -16,6 +16,7 @@ import { initials } from "@/lib/vault";
 /** Renders the sticky header with search, upload, navigation, and account actions. */
 export function TopBar({
   session,
+  tags,
   onMenu,
   navOpen,
   onOpenDocument,
@@ -23,6 +24,7 @@ export function TopBar({
   onLogout,
 }: {
   session: Session;
+  tags: Tag[];
   onMenu: () => void;
   navOpen: boolean;
   onOpenDocument: (record: DocumentRecord) => void;
@@ -54,7 +56,7 @@ export function TopBar({
         >
           <Search size={16} aria-hidden="true" />
           <span className="vault-search__placeholder">
-            Search title, filename, or tag
+            Search title, filename, date, or tag
           </span>
           <span className="vault-search__hint">⌘ K</span>
         </button>
@@ -94,6 +96,7 @@ export function TopBar({
       </header>
       <DocumentSearchPalette
         open={searchOpen}
+        availableTags={tags}
         onOpenChange={setSearchOpen}
         onSelect={onOpenDocument}
       />

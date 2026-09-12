@@ -55,6 +55,15 @@ type deletedVaultService interface {
 type searchableVaultService interface {
 	Search(context.Context, string, int) ([]vault.DocumentSearchResult, error)
 }
+type filteredSearchableVaultService interface {
+	SearchWithFilters(
+		context.Context,
+		string,
+		[]string,
+		domain.TagMatch,
+		int,
+	) ([]vault.DocumentSearchResult, error)
+}
 
 type actorVaultLinkService interface {
 	ContentLinkByActor(
@@ -153,11 +162,6 @@ func registerVaultRoutes(
 
 func handleDocumentSearch(w http.ResponseWriter, r *http.Request, service VaultService) {
 	setNoStore(w)
-	searchService, ok := service.(searchableVaultService)
-	if !ok {
-		writeError(w, http.StatusServiceUnavailable, "vault_error")
-		return
-	}
 	limit := 10
 	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
 		parsedLimit, err := strconv.Atoi(rawLimit)
@@ -170,7 +174,32 @@ func handleDocumentSearch(w http.ResponseWriter, r *http.Request, service VaultS
 	if limit > 20 {
 		limit = 20
 	}
-	results, err := searchService.Search(r.Context(), r.URL.Query().Get("q"), limit)
+
+	tags := r.URL.Query()["tag"]
+	rawMatch := r.URL.Query().Get("match")
+	var results []vault.DocumentSearchResult
+	var err error
+	if len(tags) > 0 {
+		searchService, ok := service.(filteredSearchableVaultService)
+		if !ok {
+			writeError(w, http.StatusServiceUnavailable, "vault_error")
+			return
+		}
+		results, err = searchService.SearchWithFilters(
+			r.Context(),
+			r.URL.Query().Get("q"),
+			tags,
+			domain.TagMatch(rawMatch),
+			limit,
+		)
+	} else {
+		searchService, ok := service.(searchableVaultService)
+		if !ok {
+			writeError(w, http.StatusServiceUnavailable, "vault_error")
+			return
+		}
+		results, err = searchService.Search(r.Context(), r.URL.Query().Get("q"), limit)
+	}
 	if err != nil {
 		writeVaultError(w, r, err)
 		return
@@ -324,6 +353,7 @@ func handleDocumentPatch(w http.ResponseWriter, r *http.Request, service VaultSe
 	var input struct {
 		Title   string   `json:"title"`
 		Tags    []string `json:"tags"`
+		Date    string   `json:"date"`
 		Version int64    `json:"version"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
@@ -336,6 +366,7 @@ func handleDocumentPatch(w http.ResponseWriter, r *http.Request, service VaultSe
 		vault.MetadataUpdate{
 			Title:           input.Title,
 			Tags:            input.Tags,
+			Date:            input.Date,
 			ExpectedVersion: input.Version,
 			ActorID:         memberIDPointer(memberFromContext(r.Context()).ID),
 		},

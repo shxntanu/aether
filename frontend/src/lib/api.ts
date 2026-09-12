@@ -120,17 +120,27 @@ export type Document = {
   manifestError?: string;
 };
 
-/** DocumentRecord combines catalog metadata with its reusable tags. */
+/** DocumentRecord combines catalog metadata with every attached tag. */
 export type DocumentRecord = {
   /** document contains browser-visible catalog metadata for the immutable original. */
   document: Document;
-  /** tags contains the reusable tags currently attached to the document. */
+  /** tags contains reusable tags and the implicit document date tag. */
   tags: Tag[];
+  /** uploaderName is the human-readable contributor name for the document. */
+  uploaderName: string;
+};
+
+/** SearchFilters combines selected exact tags with fuzzy metadata search. */
+export type SearchFilters = {
+  /** tags are case-insensitive tag names that must match the result. */
+  tags?: string[];
+  /** match controls whether every or any selected tag is required. */
+  match?: "all" | "any";
 };
 
 /** SearchMatchEvidence identifies one visible metadata field matched by search. */
 export type SearchMatchEvidence = {
-  /** field names the matched title, original filename, or reusable tag. */
+  /** field names the matched title, original filename, or attached tag. */
   field: "title" | "filename" | "tag";
   /** value preserves the user-facing spelling of the matched metadata. */
   value: string;
@@ -142,14 +152,16 @@ export type DocumentSearchResult = DocumentRecord & {
   evidence: SearchMatchEvidence[];
 };
 
-/** Tag is the reusable tag record attached to documents. */
+/** Tag is a reusable or vault-managed date tag attached to documents. */
 export type Tag = {
-  /** id uniquely identifies the reusable tag. */
+  /** id uniquely identifies the tag. */
   id: string;
   /** displayName contains the current user-facing spelling. */
   displayName: string;
   /** normalizedName is the case-insensitive identity used by filters. */
   normalizedName: string;
+  /** implicit marks a date tag managed through its document metadata. */
+  implicit?: boolean;
 };
 
 /** StorageUsage is the host storage account capacity reported by the backend. */
@@ -286,10 +298,25 @@ export const api = {
     limit = 10,
     signal?: AbortSignal,
   ): Promise<ApiResponse<{ results: DocumentSearchResult[] }>> {
+    return this.searchDocumentsWithFilters(query, {}, limit, signal);
+  },
+
+  /** searchDocumentsWithFilters combines fuzzy search with selected tags. */
+  searchDocumentsWithFilters(
+    query: string,
+    filters: SearchFilters,
+    limit = 10,
+    signal?: AbortSignal,
+  ): Promise<ApiResponse<{ results: DocumentSearchResult[] }>> {
     const params = new URLSearchParams({
       q: query,
       limit: String(limit),
     });
+    for (const tag of filters.tags ?? []) {
+      const trimmedTag = tag.trim();
+      if (trimmedTag !== "") params.append("tag", trimmedTag);
+    }
+    if (params.has("tag") && filters.match) params.set("match", filters.match);
     return request(`/search${querySuffix(params)}`, { signal });
   },
 
@@ -298,10 +325,15 @@ export const api = {
     return request(`/documents/${encodeURIComponent(id)}`);
   },
 
-  /** updateMetadata replaces document title and tags using optimistic concurrency. */
+  /** updateMetadata replaces title, tags, and date using optimistic concurrency. */
   updateMetadata(
     id: string,
-    payload: { title: string; tags: string[]; version: number },
+    payload: {
+      title: string;
+      tags: string[];
+      date?: string;
+      version: number;
+    },
   ): Promise<ApiResponse<DocumentRecord>> {
     return request(`/documents/${encodeURIComponent(id)}`, {
       method: "PATCH",

@@ -1,14 +1,17 @@
 import {
   ArrowDown,
   ArrowUp,
+  CircleX,
   CornerDownLeft,
   LoaderCircle,
   Search,
+  Tags,
 } from "lucide-react";
 import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -26,6 +29,7 @@ import {
   api,
   type DocumentRecord,
   type DocumentSearchResult,
+  type Tag,
 } from "@/lib/api";
 
 const searchDelay = 120;
@@ -33,10 +37,12 @@ const searchDelay = 120;
 /** Renders the keyboard-first document search palette and session query cache. */
 export function DocumentSearchPalette({
   open,
+  availableTags,
   onOpenChange,
   onSelect,
 }: {
   open: boolean;
+  availableTags: Tag[];
   onOpenChange: (open: boolean) => void;
   onSelect: (record: DocumentRecord) => void;
 }) {
@@ -45,7 +51,12 @@ export function DocumentSearchPalette({
   const abortRef = useRef<AbortController | null>(null);
   const requestRef = useRef(0);
   const listboxID = useId();
+  const tagListboxID = useId();
   const [query, setQuery] = useState("");
+  const [tagQuery, setTagQuery] = useState("");
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [tagMenuOpen, setTagMenuOpen] = useState(false);
+  const [match, setMatch] = useState<"all" | "any">("all");
   const [results, setResults] = useState<DocumentSearchResult[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [loading, setLoading] = useState(false);
@@ -57,6 +68,10 @@ export function DocumentSearchPalette({
         abortRef.current?.abort();
         requestRef.current += 1;
         setQuery("");
+        setTagQuery("");
+        setSelectedTags([]);
+        setTagMenuOpen(false);
+        setMatch("all");
         setError("");
       }
       onOpenChange(nextOpen);
@@ -67,7 +82,11 @@ export function DocumentSearchPalette({
   const closeAndSelect = useCallback(
     (result: DocumentSearchResult) => {
       changeOpen(false);
-      onSelect({ document: result.document, tags: result.tags });
+      onSelect({
+        document: result.document,
+        tags: result.tags,
+        uploaderName: result.uploaderName,
+      });
     },
     [changeOpen, onSelect],
   );
@@ -89,12 +108,18 @@ export function DocumentSearchPalette({
     return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
+  const selectedTagNames = useMemo(
+    () => selectedTags.map((tag) => tag.normalizedName),
+    [selectedTags],
+  );
+  const searchCacheKey = `${query.trim().toLowerCase()}\u001f${match}\u001f${selectedTagNames.join("\u001f")}`;
+
   useEffect(() => {
     if (!open) return;
     const normalizedQuery = query.trim().toLowerCase();
     abortRef.current?.abort();
     const request = ++requestRef.current;
-    const cached = cacheRef.current.get(normalizedQuery);
+    const cached = cacheRef.current.get(searchCacheKey);
     if (cached) {
       setResults(cached);
       setActiveIndex(cached.length > 0 ? 0 : -1);
@@ -110,13 +135,18 @@ export function DocumentSearchPalette({
         setLoading(true);
         setError("");
         void api
-          .searchDocuments(normalizedQuery, 10, controller.signal)
+          .searchDocumentsWithFilters(
+            normalizedQuery,
+            { tags: selectedTagNames, match },
+            10,
+            controller.signal,
+          )
           .then((response) => {
             if (
               request !== requestRef.current ||
               controller.signal.aborted
             ) return;
-            cacheRef.current.set(normalizedQuery, response.data.results);
+            cacheRef.current.set(searchCacheKey, response.data.results);
             setResults(response.data.results);
             setActiveIndex(response.data.results.length > 0 ? 0 : -1);
           })
@@ -135,10 +165,39 @@ export function DocumentSearchPalette({
             }
           });
       },
-      normalizedQuery === "" ? 0 : searchDelay,
+      normalizedQuery === "" && selectedTagNames.length === 0 ? 0 : searchDelay,
     );
     return () => window.clearTimeout(timer);
-  }, [open, query]);
+  }, [match, open, query, searchCacheKey, selectedTagNames]);
+
+  const tagSuggestions = useMemo(() => {
+    const normalizedTagQuery = tagQuery.trim().toLowerCase();
+    const selectedNames = new Set(selectedTagNames);
+    return availableTags
+      .filter(
+        (tag) =>
+          !selectedNames.has(tag.normalizedName) &&
+          (normalizedTagQuery === "" ||
+            tag.displayName.toLowerCase().includes(normalizedTagQuery)),
+      )
+      .slice(0, 8);
+  }, [availableTags, selectedTagNames, tagQuery]);
+
+  const selectTag = (tag: Tag) => {
+    setSelectedTags((current) =>
+      current.some((entry) => entry.normalizedName === tag.normalizedName)
+        ? current
+        : [...current, tag],
+    );
+    setTagQuery("");
+    setTagMenuOpen(true);
+  };
+
+  const removeTag = (tag: Tag) => {
+    setSelectedTags((current) =>
+      current.filter((entry) => entry.normalizedName !== tag.normalizedName),
+    );
+  };
 
   const moveActive = (direction: 1 | -1) => {
     setActiveIndex((current) => {
@@ -184,7 +243,7 @@ export function DocumentSearchPalette({
         <DialogHeader className="vault-command-palette__header">
           <DialogTitle>Find a document</DialogTitle>
           <DialogDescription>
-            Search titles, original filenames, and reusable tags.
+            Search titles, original filenames, or choose one or more tags.
           </DialogDescription>
         </DialogHeader>
         <div className="vault-command-palette__input-wrap">
@@ -199,8 +258,9 @@ export function DocumentSearchPalette({
               activeIndex >= 0 ? `${listboxID}-option-${activeIndex}` : undefined
             }
             maxLength={200}
-            placeholder="Search title, filename, or tag"
+            placeholder="Search title, filename, date, or tag"
             value={query}
+            onFocus={() => setTagMenuOpen(false)}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={handleKeyDown}
           />
@@ -208,6 +268,86 @@ export function DocumentSearchPalette({
             <LoaderCircle className="vault-spin" size={18} aria-hidden="true" />
           )}
           <kbd>esc</kbd>
+        </div>
+        <div className="vault-command-palette__tag-filter">
+          <div className="vault-command-palette__tag-heading">
+            <span>
+              <Tags size={14} aria-hidden="true" /> Filter by tags
+            </span>
+            {selectedTags.length > 1 && (
+              <button
+                className="vault-command-palette__match"
+                type="button"
+                aria-pressed={match === "all"}
+                onClick={() =>
+                  setMatch((current) => (current === "all" ? "any" : "all"))
+                }
+              >
+                Match {match === "all" ? "all" : "any"}
+              </button>
+            )}
+          </div>
+          <div className="vault-command-palette__tag-input">
+            {selectedTags.map((tag) => (
+              <span className="vault-command-palette__selected-tag" key={tag.id}>
+                <span>{tag.displayName}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${tag.displayName} filter`}
+                  onClick={() => removeTag(tag)}
+                >
+                  <CircleX size={12} aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+            <input
+              aria-label="Add a tag filter"
+              aria-controls={tagListboxID}
+              aria-expanded={tagMenuOpen}
+              placeholder={
+                selectedTags.length > 0 ? "Add another tag" : "Add a tag"
+              }
+              maxLength={100}
+              value={tagQuery}
+              onFocus={() => setTagMenuOpen(true)}
+              onChange={(event) => {
+                setTagQuery(event.target.value);
+                setTagMenuOpen(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setTagMenuOpen(false);
+                  event.stopPropagation();
+                }
+                if (event.key === "Enter" && tagSuggestions[0]) {
+                  event.preventDefault();
+                  selectTag(tagSuggestions[0]);
+                }
+              }}
+            />
+          </div>
+          {tagMenuOpen && tagSuggestions.length > 0 && (
+            <div
+              id={tagListboxID}
+              className="vault-command-palette__tag-menu"
+              role="listbox"
+              aria-label="Available tags"
+            >
+              {tagSuggestions.map((tag) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  key={tag.id}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => selectTag(tag)}
+                >
+                  {tag.displayName}
+                  {tag.implicit && <span>date</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <p className="sr-only" role="status" aria-live="polite">
           {status}
@@ -267,7 +407,7 @@ export function DocumentSearchPalette({
           {!loading && !error && results.length === 0 && (
             <div className="vault-command-palette__empty">
               <strong>No documents found</strong>
-              <span>Try a title, original filename, or tag.</span>
+              <span>Try a title, original filename, date, or tag.</span>
             </div>
           )}
           {error && (

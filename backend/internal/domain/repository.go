@@ -52,6 +52,8 @@ type Repository interface {
 	UpdateTag(ctx context.Context, tag Tag) (Tag, error)
 	// DeleteTag removes a reusable tag and its document associations.
 	DeleteTag(ctx context.Context, id TagID) error
+	// GetTag returns a reusable or implicit tag by ID.
+	GetTag(ctx context.Context, id TagID) (Tag, error)
 	// GetTagByNormalizedName returns a tag by its case-normalized name.
 	GetTagByNormalizedName(ctx context.Context, normalizedName string) (Tag, error)
 	// AttachTag associates an existing tag with a document.

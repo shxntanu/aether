@@ -144,7 +144,7 @@ const (
 	DocumentSearchFieldTitle DocumentSearchField = "title"
 	// DocumentSearchFieldFilename indicates an original-filename match.
 	DocumentSearchFieldFilename DocumentSearchField = "filename"
-	// DocumentSearchFieldTag indicates a reusable-tag match.
+	// DocumentSearchFieldTag indicates an attached-tag match.
 	DocumentSearchFieldTag DocumentSearchField = "tag"
 )
 
@@ -162,7 +162,7 @@ type DocumentSearchEvidence struct {
 type DocumentSearchResult struct {
 	// Document is the ranked ready document.
 	Document Document `json:"document"`
-	// Tags contains every reusable tag attached to the document.
+	// Tags contains every reusable tag and the implicit date tag attached.
 	Tags []Tag `json:"tags"`
 	// Evidence identifies metadata fields that matched a non-empty query.
 	Evidence []DocumentSearchEvidence `json:"evidence"`

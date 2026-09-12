@@ -21,6 +21,7 @@ type documentSearchTagRow struct {
 	ID             domain.TagID      `gorm:"column:id"`
 	DisplayName    string            `gorm:"column:display_name"`
 	NormalizedName string            `gorm:"column:normalized_name"`
+	Implicit       bool              `gorm:"column:is_implicit"`
 	Matched        bool              `gorm:"column:matched"`
 }
 
@@ -31,12 +32,36 @@ func (s *Store) SearchDocuments(
 	query string,
 	limit int,
 ) ([]domain.DocumentSearchResult, error) {
-	normalizedQuery := strings.ToLower(strings.TrimSpace(query))
+	return s.SearchDocumentsWithFilters(
+		ctx,
+		query,
+		nil,
+		domain.TagMatchAll,
+		limit,
+	)
+}
+
+// SearchDocumentsWithFilters ranks ready documents while requiring all or any
+// of the supplied normalized tags to be attached.
+func (s *Store) SearchDocumentsWithFilters(
+	ctx context.Context,
+	query string,
+	normalizedTags []string,
+	tagMatch domain.TagMatch,
+	limit int,
+) ([]domain.DocumentSearchResult, error) {
+	query = strings.ToLower(strings.TrimSpace(query))
 	if limit <= 0 || limit > 20 {
 		limit = 10
 	}
+	if tagMatch == "" {
+		tagMatch = domain.TagMatchAll
+	}
+	if tagMatch != domain.TagMatchAll && tagMatch != domain.TagMatchAny {
+		return nil, fmt.Errorf("search documents: invalid tag match %q", tagMatch)
+	}
 
-	rows, err := s.searchDocumentRows(ctx, normalizedQuery, limit)
+	rows, err := s.searchDocumentRows(ctx, query, normalizedTags, tagMatch, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -53,11 +78,11 @@ func (s *Store) SearchDocuments(
 		results[index] = domain.DocumentSearchResult{
 			Document: row.Document.domain(),
 			Tags:     []domain.Tag{},
-			Evidence: documentFieldEvidence(row, normalizedQuery),
+			Evidence: documentFieldEvidence(row, query),
 		}
 	}
 
-	tags, err := s.searchDocumentTags(ctx, ids, normalizedQuery)
+	tags, err := s.searchDocumentTags(ctx, ids, query)
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +92,7 @@ func (s *Store) SearchDocuments(
 			ID:             row.ID,
 			DisplayName:    row.DisplayName,
 			NormalizedName: row.NormalizedName,
+			Implicit:       row.Implicit,
 		})
 		if row.Matched {
 			results[index].Evidence = append(
@@ -84,25 +110,35 @@ func (s *Store) SearchDocuments(
 func (s *Store) searchDocumentRows(
 	ctx context.Context,
 	query string,
+	normalizedTags []string,
+	tagMatch domain.TagMatch,
 	limit int,
 ) ([]documentSearchRow, error) {
 	var rows []documentSearchRow
+	tagFilter := documentTagFilterClause(normalizedTags, tagMatch)
+	arguments := map[string]any{"limit": limit}
+	for index, tag := range normalizedTags {
+		arguments[fmt.Sprintf("tag%d", index)] = tag
+	}
+	if len(normalizedTags) > 0 {
+		arguments["tagCount"] = len(normalizedTags)
+	}
 	if query == "" {
-		err := s.searchORM(ctx).
-			Model(&documentModel{}).
-			Select("documents_tbl.*, FALSE AS title_match, FALSE AS filename_match").
-			Where("status = ?", domain.DocumentStatusReady).
-			Order("updated_at DESC").
-			Order("id DESC").
-			Limit(limit).
-			Scan(&rows).Error
-		if err != nil {
+		statement := `
+SELECT d.*, FALSE AS title_match, FALSE AS filename_match
+FROM documents_tbl d
+WHERE d.status = 'ready'` + tagFilter + `
+ORDER BY d.updated_at DESC, d.id DESC
+LIMIT @limit`
+		if err := s.searchORM(ctx).Raw(statement, arguments).Scan(&rows).Error; err != nil {
 			return nil, fmt.Errorf("search recent documents: %w", err)
 		}
 		return rows, nil
 	}
 
 	pattern := escapeLike(query) + "%"
+	arguments["query"] = query
+	arguments["pattern"] = pattern
 	ranking := `GREATEST(
 CASE
   WHEN lower(d.title) = @query THEN 8
@@ -153,21 +189,43 @@ WHERE d.status = 'ready'
           OR lower(t.normalized_name) % @query
         )
     )
-  )
+  )` + tagFilter + `
 ORDER BY search_rank DESC, d.updated_at DESC, d.id DESC
 LIMIT @limit`
-	err := s.searchORM(ctx).Raw(
-		statement,
-		map[string]any{
-			"query":   query,
-			"pattern": pattern,
-			"limit":   limit,
-		},
-	).Scan(&rows).Error
-	if err != nil {
+	if err := s.searchORM(ctx).Raw(statement, arguments).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("search documents: %w", err)
 	}
 	return rows, nil
+}
+
+func documentTagFilterClause(tags []string, match domain.TagMatch) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	arguments := make([]string, len(tags))
+	for index := range tags {
+		arguments[index] = fmt.Sprintf("@tag%d", index)
+	}
+	tagList := strings.Join(arguments, ", ")
+	if match == domain.TagMatchAny {
+		return `
+  AND EXISTS (
+    SELECT 1
+    FROM document_tags_tbl dt
+    JOIN tags_tbl t ON t.id = dt.tag_id
+    WHERE dt.document_id = d.id
+      AND t.normalized_name IN (` + tagList + `)
+  )`
+	}
+	return `
+  AND d.id IN (
+    SELECT dt.document_id
+    FROM document_tags_tbl dt
+    JOIN tags_tbl t ON t.id = dt.tag_id
+    WHERE t.normalized_name IN (` + tagList + `)
+    GROUP BY dt.document_id
+    HAVING COUNT(DISTINCT t.id) = @tagCount
+  )`
 }
 
 func (s *Store) searchDocumentTags(
@@ -177,11 +235,12 @@ func (s *Store) searchDocumentTags(
 ) ([]documentSearchTagRow, error) {
 	var rows []documentSearchTagRow
 	selectClause := `document_tags_tbl.document_id, tags_tbl.id,
-tags_tbl.display_name, tags_tbl.normalized_name, FALSE AS matched`
+tags_tbl.display_name, tags_tbl.normalized_name, tags_tbl.is_implicit,
+FALSE AS matched`
 	arguments := []any{}
 	if query != "" {
 		selectClause = `document_tags_tbl.document_id, tags_tbl.id,
-tags_tbl.display_name, tags_tbl.normalized_name,
+tags_tbl.display_name, tags_tbl.normalized_name, tags_tbl.is_implicit,
 (lower(tags_tbl.normalized_name) = ?
  OR lower(tags_tbl.normalized_name) LIKE ? ESCAPE '\'
  OR lower(tags_tbl.normalized_name) % ?) AS matched`

@@ -23,12 +23,18 @@ that do not meet the vault's privacy requirements.
 
 - `POST /api/v1/documents` requires an `Idempotency-Key` header and accepts
   multipart fields `file`, optional `title`, and repeated or comma-separated
-  `tags` values. Reusing the key as the same member returns the first document.
-- `GET /api/v1/documents?tag=tax&tag=2026&match=all` lists ready documents.
+  `tags` values. Every successful upload also receives an implicit
+  `YYYY-MM-DD` date tag based on the current IST date.
+  Reusing the key as the same member returns the first document.
+- `GET /api/v1/documents?tag=tax&tag=2026-09-12&match=all` lists ready documents.
   Set `match=any` to match at least one tag, or set `status=deleted` to load
   recoverable Trash records and their asynchronous deletion status.
+- `GET /api/v1/search?q=invoice&tag=tax&tag=2026-09-12&match=all` combines
+  fuzzy title, filename, and tag search with an exact all- or any-tag filter.
 - `GET /api/v1/documents/{id}` returns metadata and tags.
-- `PATCH /api/v1/documents/{id}` accepts `title`, `tags`, and `version`.
+- `PATCH /api/v1/documents/{id}` accepts `title`, reusable `tags`, `date` in
+  `YYYY-MM-DD` format, and `version`. The date changes the document's
+  implicit IST date tag.
 - `DELETE /api/v1/documents/{id}` returns `202 Accepted` with the complete
   updated document record. The catalog transition is immediate; a persisted
   background worker moves the original and manifest into provider trash and
@@ -54,3 +60,7 @@ Migration `0006_async_deletions.sql` marks existing deleted rows complete and
 adds only backward-compatible columns. Rolling application code back is safe
 because older versions ignore those columns; apply the migration before
 deploying code that starts the deletion worker.
+
+Migration `0009_implicit_document_dates.sql` adds the implicit-tag marker and
+backfills IST date tags for existing documents. Apply it before deploying code
+that enables date filters or date editing.

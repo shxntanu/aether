@@ -1,4 +1,4 @@
-import type { DocumentRecord } from "@/lib/api";
+import type { DocumentRecord, Tag } from "@/lib/api";
 
 /** Names of the primary vault routes rendered by the application shell. */
 export type RouteName = "library" | "recent" | "tags" | "trash" | "members";
@@ -35,6 +35,29 @@ export function formatDate(value: string): string {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
+}
+
+/** Formats a timestamp as the editable implicit date in IST. */
+export function formatDateInput(value: string): string {
+  const parts = new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).formatToParts(new Date(value));
+  const values = Object.fromEntries(
+    parts
+      .filter(({ type }) => type !== "literal")
+      .map(({ type, value: part }) => [type, part]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+/** Identifies a vault-managed date tag, including legacy date-shaped tags. */
+export function isImplicitDateTag(
+  tag: Pick<Tag, "displayName" | "implicit">,
+): boolean {
+  return tag.implicit === true || /^\d{4}-\d{2}-\d{2}$/.test(tag.displayName);
 }
 
 /** Categorizes a media type for the matching icon and preview treatment. */

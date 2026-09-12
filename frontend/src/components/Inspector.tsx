@@ -2,7 +2,13 @@ import { CircleAlert, Download, LoaderCircle, Trash2, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import type { DocumentItem } from "@/lib/vault";
-import { formatBytes, formatDate, getErrorMessage } from "@/lib/vault";
+import {
+  formatBytes,
+  formatDate,
+  formatDateInput,
+  getErrorMessage,
+  isImplicitDateTag,
+} from "@/lib/vault";
 
 import { Preview } from "@/components/Preview";
 import { Status } from "@/components/Status";
@@ -27,12 +33,20 @@ export function Inspector({
 }: {
   item: DocumentItem;
   onClose: () => void;
-  onUpdate: (title: string, tags: string[]) => Promise<void>;
+  onUpdate: (title: string, tags: string[], date: string) => Promise<void>;
   onDelete: () => Promise<void>;
   onDownload: () => void;
 }) {
+  const dateTag = item.tags.find(isImplicitDateTag);
   const [title, setTitle] = useState(item.document.title);
-  const [tags, setTags] = useState(item.tags.map((tag) => tag.displayName));
+  const [date, setDate] = useState(
+    dateTag?.displayName ?? formatDateInput(item.document.createdAt),
+  );
+  const [tags, setTags] = useState(
+    item.tags
+      .filter((tag) => !isImplicitDateTag(tag))
+      .map((tag) => tag.displayName),
+  );
   const [newTag, setNewTag] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -49,7 +63,7 @@ export function Inspector({
     setSaving(true);
     setMessage("");
     try {
-      await onUpdate(title, tags);
+      await onUpdate(title, tags, date);
       setMessage("Metadata saved");
     } catch (error) {
       setMessage(getErrorMessage(error));
@@ -105,75 +119,89 @@ export function Inspector({
               {item.document.originalFilename}
             </p>
             <dl className="vault-facts">
-          <div className="vault-fact">
-            <dt>Format</dt>
-            <dd>{item.document.mediaType}</dd>
-          </div>
-          <div className="vault-fact">
-            <dt>File size</dt>
-            <dd>{formatBytes(item.document.sizeBytes)}</dd>
-          </div>
-          <div className="vault-fact">
-            <dt>Uploaded</dt>
-            <dd>{formatDate(item.document.createdAt)}</dd>
-          </div>
-          <div className="vault-fact">
-            <dt>Last changed</dt>
-            <dd>{formatDate(item.document.updatedAt)}</dd>
-          </div>
-          <div className="vault-fact">
-            <dt>Status</dt>
-            <dd>
-              <Status status={item.document.status} />
-            </dd>
-          </div>
+              <div className="vault-fact">
+                <dt>Format</dt>
+                <dd>{item.document.mediaType}</dd>
+              </div>
+              <div className="vault-fact">
+                <dt>File size</dt>
+                <dd>{formatBytes(item.document.sizeBytes)}</dd>
+              </div>
+              <div className="vault-fact">
+                <dt>Uploaded</dt>
+                <dd>{formatDate(item.document.createdAt)}</dd>
+              </div>
+              <div className="vault-fact">
+                <dt>Last changed</dt>
+                <dd>{formatDate(item.document.updatedAt)}</dd>
+              </div>
+              <div className="vault-fact">
+                <dt>Status</dt>
+                <dd>
+                  <Status status={item.document.status} />
+                </dd>
+              </div>
             </dl>
             <section className="vault-inspector__section">
-          <h3>Catalog metadata</h3>
-          <label className="vault-toolbar__label" htmlFor="inspector-title">
-            Display title
-          </label>
-          <Input
-            className="vault-edit-input"
-            id="inspector-title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-          <h3 className="vault-section-spaced">Reusable tags</h3>
-          <div className="vault-tag-editor">
-            {tags.map((tag) => (
-              <Badge variant="outline" className="vault-tag" key={tag}>
-                {tag}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  type="button"
-                  aria-label={`Remove ${tag} tag`}
-                  onClick={() =>
-                    setTags((current) =>
-                      current.filter((entry) => entry !== tag),
-                    )
-                  }
-                >
-                  <X size={11} aria-hidden="true" />
-                </Button>
-              </Badge>
-            ))}
-            <Input
-              className="vault-edit-input vault-add-tag-input"
-              aria-label="Add a tag"
-              placeholder="Add a tag"
-              value={newTag}
-              onChange={(event) => setNewTag(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && newTag.trim()) {
-                  event.preventDefault();
-                  setTags((current) => [...current, newTag.trim()]);
-                  setNewTag("");
-                }
-              }}
-            />
-          </div>
+              <h3>Catalog metadata</h3>
+              <label className="vault-toolbar__label" htmlFor="inspector-title">
+                Display title
+              </label>
+              <Input
+                className="vault-edit-input"
+                id="inspector-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+              <label
+                className="vault-toolbar__label vault-date-label"
+                htmlFor="inspector-date"
+              >
+                File date (IST)
+              </label>
+              <Input
+                className="vault-edit-input"
+                id="inspector-date"
+                type="date"
+                required
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+              />
+              <h3 className="vault-section-spaced">Reusable tags</h3>
+              <div className="vault-tag-editor">
+                {tags.map((tag) => (
+                  <Badge variant="outline" className="vault-tag" key={tag}>
+                    {tag}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      aria-label={`Remove ${tag} tag`}
+                      onClick={() =>
+                        setTags((current) =>
+                          current.filter((entry) => entry !== tag),
+                        )
+                      }
+                    >
+                      <X size={11} aria-hidden="true" />
+                    </Button>
+                  </Badge>
+                ))}
+                <Input
+                  className="vault-edit-input vault-add-tag-input"
+                  aria-label="Add a tag"
+                  placeholder="Add a tag"
+                  value={newTag}
+                  onChange={(event) => setNewTag(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && newTag.trim()) {
+                      event.preventDefault();
+                      setTags((current) => [...current, newTag.trim()]);
+                      setNewTag("");
+                    }
+                  }}
+                />
+              </div>
             </section>
             {message && (
               <div className="vault-notice" role="status">
@@ -181,22 +209,22 @@ export function Inspector({
               </div>
             )}
             <div className="vault-inspector__actions">
-          <Button
-            variant="outline"
-            className="vault-button vault-button--quiet"
-            type="button"
-            onClick={onDownload}
-          >
-            <Download size={14} aria-hidden="true" /> Download
-          </Button>
-          <Button
-            variant="default"
-            className="vault-button vault-button--primary"
-            type="submit"
-            disabled={saving}
-          >
-            {saving ? "Saving…" : "Save changes"}
-          </Button>
+              <Button
+                variant="outline"
+                className="vault-button vault-button--quiet"
+                type="button"
+                onClick={onDownload}
+              >
+                <Download size={14} aria-hidden="true" /> Download
+              </Button>
+              <Button
+                variant="default"
+                className="vault-button vault-button--primary"
+                type="submit"
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save changes"}
+              </Button>
             </div>
           </form>
         </ScrollArea>

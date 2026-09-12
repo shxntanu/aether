@@ -33,6 +33,7 @@ type tagModel struct {
 	ID             domain.TagID `gorm:"column:id;primaryKey"`
 	DisplayName    string       `gorm:"column:display_name"`
 	NormalizedName string       `gorm:"column:normalized_name"`
+	Implicit       bool         `gorm:"column:is_implicit"`
 }
 
 func (tagModel) TableName() string { return "tags_tbl" }

@@ -7,7 +7,6 @@ services:
     buildCommand: go build -trimpath -o bin/aether ./cmd/aether
     startCommand: ./bin/aether
     healthCheckPath: /api/v1/health
-    maxShutdownDelaySeconds: 30
     envVars:
       - key: AETHER_HTTP_ADDRESS
         value: 0.0.0.0:10000

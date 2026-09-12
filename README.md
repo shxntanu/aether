@@ -1,3 +1,13 @@
+![Banner](./assets/banner.png)
+
+<div align="center">
+
+**_Aether_**
+`[lee - saa]` • **Old Greek** <br/>
+the clear upper air that the gods breathe
+
+</div>
+
 # Project Aether
 
 Deployment guides:

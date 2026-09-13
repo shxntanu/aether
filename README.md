@@ -6,13 +6,13 @@
 
 **A friendlier search for your documents in Google Drive.**
 
-Old Greek · _the clear upper air that the gods breathe_
+`[ae-ther]` · Old Greek · _the clear upper air that the gods breathe_
 
 </div>
 
 > Aether is a boomer-friendly search layer built on top of Google Drive as the storage.
-> It solves a very personal problem that I had: helping my parents store and retrieve documents
-> with (almost) natural language queries.
+> It is trying to solve a very personal problem that I had: helping my parents store and retrieve
+> documents with (almost) natural language queries.
 
 ## Why does this project exist?
 
@@ -21,19 +21,13 @@ My parents would simply scan a bunch of documents but wouldn't name them intuiti
 specifically. When they would want to find the document using memory, they'd just ask me and I would be
 sitting there, scratching my head trying to rememeber what the name of the documemnt was (e.g. a
 "prescription" from Doctor "X" which prescribes "A, B and C" medicines, which I had renamed
-as `Adobe Scane 10-04-2026.pdf` T_T).
+as `Adobe-Scan-10-04-2026.pdf` 😭).
 
 I tried to solve this manually by renaming the files to be able to search them later, but that approach
 fell apart, partly because of laziness, and partly because a file needed to have a reasonable name. I
 couldn't just add all the words I associate the file with.
 I also didn't want to pay for hosting and storage. Google Drive was more than enough. Thus, I built
 this as a simple, self-hostable tool which works well at the family-scale.
-
-Aether adds a lightweight metadata and search layer so documents can have reusable tags without
-changing the original file.
-The result is a simple, self-hostable archive for family-scale use. It keeps the
-storage layer flexible, avoids unnecessary hosting and storage costs, and makes
-the original document easier to find when memory is the only index you have.
 
 ## What you can do
 
@@ -52,6 +46,10 @@ the original document easier to find when memory is the only index you have.
   administrator restore, and retention-aware permanent purge.
 - **Keep storage replaceable** through a provider-neutral object-store boundary:
   use Google Drive, local storage, or another provider that fits the environment.
+
+## Get Started
+
+To self-host your version of Aether, read [DEPLOY.md](./DEPLOY.md).
 
 ## Architecture
 
